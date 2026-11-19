@@ -6,3 +6,6 @@ DerivedData/
 *.xcodeproj/
 Config/Local.xcconfig
 build/
+
+# Gala run output (signed IPAs can carry a bundled T3 token)
+.gala/

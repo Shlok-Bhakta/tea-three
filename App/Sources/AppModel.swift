@@ -7,7 +7,12 @@ import TeaThreeKit
 enum Shared {
     // Intents run in-process, so the app's own Keychain and defaults are
     // enough. Move to an App Group if a widget/control extension is added.
-    nonisolated static let service = TeaThreeService(credentials: KeychainCredentialStore(), store: SharedStore(defaults: .standard))
+    nonisolated static let service: TeaThreeService = {
+        let service = TeaThreeService(credentials: KeychainCredentialStore(), store: SharedStore(defaults: .standard))
+        // Builds made with `ios-build.sh` can carry a login, so they arrive paired.
+        service.adoptBundledCredential(at: Bundle.main.url(forResource: "TeaThreeBootstrap", withExtension: "json"))
+        return service
+    }()
 }
 
 /// App-wide state, shared by the phone UI, the CarPlay scene, and App Intents

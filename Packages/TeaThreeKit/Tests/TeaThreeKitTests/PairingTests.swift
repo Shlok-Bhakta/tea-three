@@ -118,3 +118,50 @@ final class FakeOAuthServer: HTTPTransport, @unchecked Sendable {
         }
     }
 }
+
+@Suite("Bundled credential")
+struct BundledCredentialTests {
+    func write(_ credential: T3Credential) throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("bootstrap-\(UUID().uuidString).json")
+        try JSONEncoder().encode(credential).write(to: url)
+        return url
+    }
+
+    func credential(token: String, expires: TimeInterval = 86_400) -> T3Credential {
+        T3Credential(serverURL: URL(string: "http://100.100.163.102:3773")!, accessToken: token,
+                     expiresAt: Date().addingTimeInterval(expires), scope: nil, clientID: "c",
+                     environmentID: "env", environmentLabel: "crabcake")
+    }
+
+    @Test("a fresh install adopts the bundled token once")
+    func adoptsOnce() throws {
+        let service = TeaThreeService(credentials: MemoryCredentialStore(), store: .ephemeral())
+        let url = try write(credential(token: "baked"))
+        #expect(service.adoptBundledCredential(at: url))
+        #expect(service.credentials.load()?.accessToken == "baked")
+
+        // Unpairing (or pairing by hand) sticks across launches of the same build.
+        service.unpair()
+        #expect(!service.adoptBundledCredential(at: url))
+        #expect(service.credentials.load() == nil)
+    }
+
+    @Test("a new build's token replaces the old one and forgets the Copilot thread")
+    func newBuildWins() throws {
+        let service = TeaThreeService(credentials: MemoryCredentialStore(), store: .ephemeral())
+        #expect(service.adoptBundledCredential(at: try write(credential(token: "first"))))
+        service.store.copilotThreadID = "thread-1"
+        #expect(service.adoptBundledCredential(at: try write(credential(token: "second"))))
+        #expect(service.credentials.load()?.accessToken == "second")
+        #expect(service.store.copilotThreadID == nil)
+    }
+
+    @Test("missing, unreadable, or expired bundles are ignored")
+    func ignoresBadBundles() throws {
+        let service = TeaThreeService(credentials: MemoryCredentialStore.paired, store: .ephemeral())
+        #expect(!service.adoptBundledCredential(at: nil))
+        #expect(!service.adoptBundledCredential(at: URL(fileURLWithPath: "/nonexistent.json")))
+        #expect(!service.adoptBundledCredential(at: try write(credential(token: "old", expires: -60))))
+        #expect(service.credentials.load()?.accessToken == "test-token")
+    }
+}

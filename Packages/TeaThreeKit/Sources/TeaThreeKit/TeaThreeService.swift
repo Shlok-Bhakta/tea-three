@@ -22,6 +22,21 @@ public struct TeaThreeService: Sendable {
         return credential
     }
 
+    /// Installs a credential baked into the app at build time (see `ios-build.sh`),
+    /// so a fresh build arrives already paired. Each bundled token is adopted once:
+    /// pairing by hand or unpairing afterwards isn't undone on the next launch.
+    @discardableResult
+    public func adoptBundledCredential(at url: URL?) -> Bool {
+        guard let url, let data = try? Data(contentsOf: url),
+              let credential = try? JSONDecoder().decode(T3Credential.self, from: data),
+              !credential.isExpired,
+              store.adoptedBundledToken != SharedStore.fingerprint(credential.accessToken),
+              (try? credentials.save(credential)) != nil else { return false }
+        store.adoptedBundledToken = SharedStore.fingerprint(credential.accessToken)
+        store.copilotThreadID = nil
+        return true
+    }
+
     public func unpair() {
         credentials.clear()
         store.copilotThreadID = nil

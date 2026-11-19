@@ -66,6 +66,19 @@ Add your own standing instructions in **Settings › Notes for the Copilot**, fo
    default for the threads it starts.
 5. **Action button:** Settings › Action Button › Shortcut › Tea Three › *Talk to T3*.
 
+**Skip pairing on the phone (Gala builds).** `ios-build.sh` bakes a credential
+into the app if one exists at `~/.config/tea-three/bootstrap.json` (or
+`$TEA_THREE_BOOTSTRAP`). Pair from the Mac once, then build:
+
+```sh
+TEA_THREE_CREDENTIAL=~/.config/tea-three/bootstrap.json \
+  swift run --package-path Packages/TeaThreeKit tea-three pair 'http://<server>:3773/pair#token=…'
+gala deliver
+```
+
+The app adopts each baked token once on first launch, so unpairing or pairing by
+hand sticks. The token is in the IPA, so only share the build with yourself.
+
 The token lasts 30 days (T3's limit for MCP clients, with no refresh). When it
 expires, Siri tells you to open the app, and you run `t3 pair` again.
 
@@ -158,6 +171,7 @@ Packages/TeaThreeKit/      client library + `tea-three` CLI + tests
   Sources/TeaThreeKit/     MCP client, OAuth pairing, T3 tools, Copilot, contract
   Tests/                   fixture tests, live contract tests
 scripts/                   contract-against-npm.sh
+ios-build.sh, ios-test.sh  Gala Engine recipes (build + bundled login, kit tests)
 project.yml                XcodeGen spec (the .xcodeproj is generated, not committed)
 ```
 

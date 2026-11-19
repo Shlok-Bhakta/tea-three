@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// State shared by the app, its App Intents, and the CarPlay scene through
@@ -30,6 +31,7 @@ public final class SharedStore: @unchecked Sendable {
         static let readCursor = "copilot.readCursor"
         static let outbox = "outbox"
         static let lastContractReport = "contract.lastReport"
+        static let adoptedBundledToken = "bootstrap.adoptedToken"
     }
 
     public var settings: CopilotSettings {
@@ -82,6 +84,18 @@ public final class SharedStore: @unchecked Sendable {
     public var lastContractReport: String? {
         get { defaults.string(forKey: Key.lastContractReport) }
         set { defaults.set(newValue, forKey: Key.lastContractReport) }
+    }
+
+    // MARK: Bundled credential
+
+    /// Fingerprint of the last build-time token adopted, so it's adopted only once.
+    var adoptedBundledToken: String? {
+        get { defaults.string(forKey: Key.adoptedBundledToken) }
+        set { defaults.set(newValue, forKey: Key.adoptedBundledToken) }
+    }
+
+    static func fingerprint(_ token: String) -> String {
+        SHA256.hash(data: Data(token.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
     // MARK: Helpers
