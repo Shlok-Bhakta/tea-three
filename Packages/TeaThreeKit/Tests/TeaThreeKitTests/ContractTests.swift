@@ -114,4 +114,20 @@ struct ContractTests {
         #expect(violations.count == 1)
         #expect(violations.first?.critical == false)
     }
+
+    @Test("model options (reasoning effort, fast mode) decode from capabilities")
+    func modelOptions() throws {
+        let caps = try JSONValue.object(["providers": [[
+            "providerInstanceId": "claudeAgent", "displayName": "Claude",
+            "models": [["id": "claude-opus-5-5", "label": "Claude Opus 5.5", "options": [
+                ["id": "effort", "values": ["low", "medium", "high", "ultrathink"], "default": "medium"],
+                ["id": "fastMode", "values": [false, true]],
+            ]]],
+        ]]]).decode(OrchestratorCapabilities.self)
+        let found = try #require(caps.lookup(ModelSelection(instanceId: "claudeAgent", model: "claude-opus-5-5")))
+        let options = try #require(found.model.options)
+        #expect(options[0].id == "effort" && options[0].default == "medium" && !options[0].isToggle)
+        #expect(options[1].isToggle && options[1].default == nil)
+        #expect(caps.lookup(ModelSelection(instanceId: "codex", model: "claude-opus-5-5")) == nil)
+    }
 }

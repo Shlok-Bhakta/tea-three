@@ -3,6 +3,7 @@ import TeaThreeKit
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
+    @AppStorage("theme") private var themeName = ThemeName.t3Chat.rawValue
     @Environment(\.dismiss) private var dismiss
     @State private var checking = false
 
@@ -10,6 +11,18 @@ struct SettingsView: View {
         @Bindable var model = model
         NavigationStack {
             Form {
+                Section {
+                    Picker("Theme", selection: $themeName) {
+                        ForEach(ThemeName.allCases) { theme in
+                            Text(theme.title).tag(theme.rawValue)
+                        }
+                    }
+                } header: {
+                    Text("Appearance")
+                } footer: {
+                    Text("T3 Code's purple themes. Light or dark follows your phone.")
+                }
+
                 Section {
                     TextField("Pinned thread title", text: $model.settings.threadTitle)
                     Picker("Lives in", selection: Binding(get: { model.settings.projectId }, set: { model.choose(project: $0) })) {
@@ -81,6 +94,8 @@ struct SettingsView: View {
                         .font(.footnote)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(ThemeBackground())
             .navigationTitle("Settings")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }

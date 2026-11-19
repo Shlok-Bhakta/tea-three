@@ -10,6 +10,7 @@ struct TeaThreeApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
+                .themed()
                 .onOpenURL { url in
                     // teathree://pair?pairingUrl=... (or a scanned t3code:// link)
                     PairingRouter.shared.pending = url.absoluteString
@@ -44,7 +45,11 @@ struct RootView: View {
         if model.isPaired {
             HomeView()
         } else {
-            NavigationStack { PairingView() }
+            NavigationStack {
+                PairingView()
+                    .scrollContentBackground(.hidden)
+                    .background(ThemeBackground())
+            }
         }
     }
 }

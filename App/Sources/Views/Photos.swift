@@ -31,6 +31,7 @@ struct PendingPhoto: Identifiable {
 /// The photo button: take one with the camera or pick from the library.
 struct PhotoButton: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.theme) private var theme
     @State private var showCamera = false
     @State private var showLibrary = false
     @State private var picked: [PhotosPickerItem] = []
@@ -42,9 +43,11 @@ struct PhotoButton: View {
             }
             Button("Choose from Library", systemImage: "photo.on.rectangle") { showLibrary = true }
         } label: {
-            Image(systemName: "camera.fill")
-                .font(.title3)
+            Image(systemName: "plus")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(theme.foreground)
                 .frame(width: 36, height: 36)
+                .background(theme.foreground.opacity(0.07), in: Circle())
         }
         .accessibilityLabel("Attach a photo")
         .photosPicker(isPresented: $showLibrary, selection: $picked, maxSelectionCount: 4, matching: .images)

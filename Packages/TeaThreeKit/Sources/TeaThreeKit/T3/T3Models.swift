@@ -177,8 +177,19 @@ public struct ProjectListResult: Sendable, Codable {
 public struct OrchestratorCapabilities: Sendable, Codable {
     public struct Provider: Sendable, Codable, Hashable, Identifiable {
         public struct Model: Sendable, Codable, Hashable, Identifiable {
+            /// A per-model setting such as reasoning effort or fast mode.
+            /// Values are strings or booleans; T3 adds new options over time.
+            public struct Option: Sendable, Codable, Hashable, Identifiable {
+                public let id: String
+                public let values: [JSONValue]
+                public let `default`: JSONValue?
+
+                public var isToggle: Bool { values.allSatisfy { if case .bool = $0 { true } else { false } } }
+            }
+
             public let id: String
             public let label: String?
+            public let options: [Option]?
             public var displayName: String { label ?? id }
         }
 
@@ -192,6 +203,15 @@ public struct OrchestratorCapabilities: Sendable, Codable {
 
     public let runtimeMode: String?
     public let providers: [Provider]
+
+    /// The provider and model a selection points at, if the server still lists it.
+    public func lookup(_ selection: ModelSelection) -> (provider: Provider, model: Provider.Model)? {
+        let instance = selection.instanceId ?? selection.provider
+        for provider in providers where instance == nil || provider.providerInstanceId == instance {
+            if let model = provider.models.first(where: { $0.id == selection.model }) { return (provider, model) }
+        }
+        return nil
+    }
 
     /// The first model listed, for tests and tools that need *a* model to launch an idle thread.
     public var firstModel: ModelSelection? {
