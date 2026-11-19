@@ -32,16 +32,12 @@ public actor Copilot {
             store.copilotThreadID = found
             return found
         }
-        let model: ModelSelection?
-        if let chosen = settings.copilotModel {
-            model = chosen
-        } else {
-            model = Self.defaultModel(from: try await client.capabilities())
-        }
+        // The user picks the model in the app; Tea Three never chooses one.
+        guard let model = settings.copilotModel else { throw T3Error.needsModel }
         let launched = try await client.launchThread(.init(
             title: settings.threadTitle,
             message: CopilotPrompts.briefing(settings: settings),
-            projectId: settings.projectId,
+            projectId: try await projectId(),
             modelSelection: model,
             runtimeMode: settings.runtimeMode,
             clientRequestId: "tea-three-copilot-\(UUID().uuidString)"
@@ -52,22 +48,25 @@ public actor Copilot {
         return launched.threadId
     }
 
-    /// A quick, capable model for routing when the user hasn't picked one:
-    /// Claude Sonnet if present, else the first model of the first provider.
-    public static func defaultModel(from capabilities: OrchestratorCapabilities) -> ModelSelection? {
-        let preferences: [(provider: String, modelPrefix: String)] = [
-            ("claudeAgent", "claude-sonnet"), ("claudeAgent", "claude-opus"), ("codex", "gpt"),
-        ]
-        for preference in preferences {
-            if let provider = capabilities.providers.first(where: { $0.providerInstanceId == preference.provider }),
-               let model = provider.models.first(where: { $0.id.hasPrefix(preference.modelPrefix) })
-            {
-                return ModelSelection(instanceId: provider.providerInstanceId, model: model.id)
-            }
-        }
-        return capabilities.providers.first(where: { !$0.models.isEmpty }).map {
-            ModelSelection(instanceId: $0.providerInstanceId, model: $0.models[0].id)
-        }
+    /// Switches the Copilot thread to `model` now. Threads it starts inherit it.
+    /// Before the thread exists there's nothing to change: it's created with the model.
+    public func use(_ model: ModelSelection) async throws {
+        guard let threadId = store.copilotThreadID else { return }
+        try await client.configure(threadId: threadId, modelSelection: model)
+    }
+
+    /// The chosen project, or the broadest one on the server (the home folder
+    /// project, if there is one) so the Copilot sits with your normal threads
+    /// rather than in a scratch folder. `nil` only when the server has no projects.
+    func projectId() async throws -> String? {
+        if let chosen = settings.projectId { return chosen }
+        return Self.homeProject(in: try await client.projects())?.projectId
+    }
+
+    public static func homeProject(in projects: [ProjectListResult.Project]) -> ProjectListResult.Project? {
+        projects
+            .filter { $0.workspaceRoot != nil }
+            .min { ($0.workspaceRoot!.split(separator: "/").count, $0.workspaceRoot!) < ($1.workspaceRoot!.split(separator: "/").count, $1.workspaceRoot!) }
     }
 
     private func isUsable(_ threadId: String) async -> Bool {
@@ -77,7 +76,9 @@ public actor Copilot {
 
     private func findByTitle() async throws -> String? {
         let matches = try await client.searchThreads(settings.threadTitle, limit: 10)
-        for match in matches where match.title == settings.threadTitle {
+        // A Copilot left behind in another project isn't this one.
+        let projectId = try await projectId()
+        for match in matches where match.title == settings.threadTitle && (projectId == nil || match.projectId == nil || match.projectId == projectId) {
             if await isUsable(match.threadId) { return match.threadId }
         }
         return nil

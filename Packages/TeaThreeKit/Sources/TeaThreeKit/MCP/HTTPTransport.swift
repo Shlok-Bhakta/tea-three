@@ -38,6 +38,8 @@ public enum T3Error: Error, Sendable, Equatable, LocalizedError {
     case tool(name: String, code: String?, message: String)
     /// Bad pairing input (URL, code).
     case pairing(String)
+    /// No model picked in the app yet, so the Copilot thread can't start.
+    case needsModel
 
     public var errorDescription: String? {
         switch self {
@@ -47,6 +49,7 @@ public enum T3Error: Error, Sendable, Equatable, LocalizedError {
         case .rpc(let code, let message): "T3 Code MCP error \(code): \(message)"
         case .tool(let name, let code, let message): "\(name) failed\(code.map { " (\($0))" } ?? ""): \(message)"
         case .pairing(let message): message
+        case .needsModel: "Pick a model in Tea Three first."
         }
     }
 
@@ -58,6 +61,7 @@ public enum T3Error: Error, Sendable, Equatable, LocalizedError {
         case .protocolMismatch: "T3 Code changed in a way I don't understand yet."
         case .rpc, .tool: "T3 Code returned an error."
         case .pairing(let message): message
+        case .needsModel: "Pick a model in the Tea Three app first."
         }
     }
 }

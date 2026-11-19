@@ -192,4 +192,9 @@ public struct OrchestratorCapabilities: Sendable, Codable {
 
     public let runtimeMode: String?
     public let providers: [Provider]
+
+    /// The first model listed, for tests and tools that need *a* model to launch an idle thread.
+    public var firstModel: ModelSelection? {
+        providers.first { !$0.models.isEmpty }.map { ModelSelection(instanceId: $0.providerInstanceId, model: $0.models[0].id) }
+    }
 }

@@ -25,7 +25,7 @@ struct LiveContractTests {
         if !violations.isEmpty { print("Contract warnings: \(violations)") }
 
         let capabilities = try await client.capabilities()
-        let model = try #require(Copilot.defaultModel(from: capabilities), "server lists no models")
+        let model = try #require(capabilities.firstModel, "server lists no models")
 
         let title = "tea-three contract \(UUID().uuidString.prefix(8))"
         let launched = try await client.launchThread(.init(title: title, modelSelection: model))

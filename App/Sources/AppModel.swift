@@ -90,6 +90,34 @@ final class AppModel {
         outboxCount = service.store.outbox.count
     }
 
+    // MARK: Choices
+
+    /// The model for the Copilot, and so for every thread it starts (they inherit it).
+    /// Applied to the existing Copilot thread right away.
+    func choose(model selection: ModelSelection) {
+        settings.copilotModel = selection
+        Task {
+            do {
+                try await service.copilot().use(selection)
+                lastError = nil
+            } catch let error as T3Error {
+                lastError = error.errorDescription
+            } catch {
+                lastError = error.localizedDescription
+            }
+        }
+    }
+
+    /// A thread can't move projects, so a new project means a new Copilot thread.
+    func choose(project projectId: String?) {
+        guard projectId != settings.projectId else { return }
+        settings.projectId = projectId
+        resetCopilotThread()
+    }
+
+    /// Where the Copilot lives when no project is chosen.
+    var automaticProject: ProjectListResult.Project? { Copilot.homeProject(in: projects) }
+
     /// Forgets the cached Copilot thread; the next message finds or recreates it.
     func resetCopilotThread() {
         service.store.copilotThreadID = nil

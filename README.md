@@ -42,6 +42,10 @@ state), so if T3 changes something and Tea Three breaks, your main app keeps wor
 
 The Copilot is told how each message arrived (Siri, so nobody's listening;
 voice, so keep it short and speakable; typed) and to never settle its own thread.
+The Copilot thread is a normal pinned thread in T3 Code, so you see it (and its
+history) in the regular T3 app. It lives in your broadest project (usually the home
+folder) unless you pick one in Settings. The app itself only shows the latest exchange.
+
 Add your own standing instructions in **Settings › Notes for the Copilot**, for example:
 
 > Food logs go to the Health project with the food-log skill. Anything I say to "do later" gets snoozed until 9am tomorrow.
@@ -62,8 +66,9 @@ Add your own standing instructions in **Settings › Notes for the Copilot**, fo
    Run on your iPhone. A free Apple ID works, but the app expires after 7 days.
    A paid account lasts a year and is needed for CarPlay.
 3. **Pair.** On the Mac, run `t3 pair` and scan the QR code in Tea Three (or paste the URL).
-4. **Pick models** in Settings: one for the Copilot (fast is good) and an optional
-   default for the threads it starts.
+4. **Pick a model** on the main screen. The list comes from your server, and Tea
+   Three never picks one for you. The Copilot uses it, and threads it starts inherit
+   it. Changing it switches the Copilot thread right away.
 5. **Action button:** Settings › Action Button › Shortcut › Tea Three › *Talk to T3*.
 
 **Skip pairing on the phone (Gala builds).** `ios-build.sh` bakes a credential

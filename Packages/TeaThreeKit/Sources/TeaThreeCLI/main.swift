@@ -170,7 +170,7 @@ func record(into directory: URL) async throws {
     try save("t3_project_list", try await raw("t3_project_list", ["limit": 5]))
 
     let parsed = try capabilities.decode(OrchestratorCapabilities.self)
-    guard let model = Copilot.defaultModel(from: parsed) else { fail("no models") }
+    guard let model = parsed.firstModel else { fail("no models") }
     let title = "tea-three fixture \(UUID().uuidString.prefix(8))"
     let launched = try await raw("t3_thread_launch", try JSONValue.from(T3Client.LaunchRequest(title: title, modelSelection: model)))
     try save("t3_thread_launch", launched)

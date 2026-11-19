@@ -36,6 +36,7 @@ struct CopilotTests {
         server.toolHandler = { name, _ in name == "t3_thread_search" ? ["matches": []] : nil }
         let store = SharedStore.ephemeral()
         var settings = CopilotSettings.default
+        settings.copilotModel = ModelSelection(instanceId: "claudeAgent", model: "claude-opus-5-5")
         settings.workerModel = ModelSelection(instanceId: "codex", model: "gpt-6.2-sol")
         settings.extraInstructions = "Food goes in the Health project."
         let copilot = Copilot(client: .fake(server), settings: settings, store: store)
@@ -43,14 +44,15 @@ struct CopilotTests {
         let id = try await copilot.ensureThread()
         let launch = try #require(server.calls(to: "t3_thread_launch").first?.arguments)
         #expect(launch["title"] == "Tea Three Copilot")
-        #expect(launch["scratch"] == true)
+        // No project chosen: the broadest project on the server, never a separate scratch folder.
+        #expect(launch["projectId"] == "f5d40789-8ddf-4d0b-8748-70c4a1d8a009")
+        #expect(launch["scratch"] == nil)
         let message = try #require(launch["message"]?.stringValue)
         #expect(message.contains("t3_thread_launch"))
         #expect(message.contains("gpt-6.2-sol"))
         #expect(message.contains("Food goes in the Health project."))
-        // No model chosen: picked from orchestrator_capabilities.
         #expect(launch["modelSelection"]?["instanceId"] == "claudeAgent")
-        #expect(launch["modelSelection"]?["model"]?.stringValue?.hasPrefix("claude-sonnet") == true)
+        #expect(launch["modelSelection"]?["model"] == "claude-opus-5-5")
 
         let pin = try #require(server.calls(to: "t3_thread_organize").first?.arguments)
         #expect(pin["action"] == "pin")
@@ -74,7 +76,9 @@ struct CopilotTests {
         }
         let store = SharedStore.ephemeral()
         store.copilotThreadID = "stale"
-        let id = try await Copilot(client: .fake(server), settings: .default, store: store).ensureThread()
+        var settings = CopilotSettings.default
+        settings.copilotModel = ModelSelection(instanceId: "claudeAgent", model: "claude-sonnet-5-5")
+        let id = try await Copilot(client: .fake(server), settings: settings, store: store).ensureThread()
         #expect(id != "stale")
         #expect(server.calls(to: "t3_thread_launch").count == 1)
     }
@@ -211,4 +215,56 @@ final class Counter: @unchecked Sendable {
 actor EventLog {
     var events: [Copilot.Event] = []
     func append(_ event: Copilot.Event) { events.append(event) }
+}
+
+@Suite("Model and project choice")
+struct ModelChoiceTests {
+    @Test("with no model picked, nothing is launched and the user is told to pick one")
+    func needsModel() async throws {
+        let server = FakeT3()
+        server.toolHandler = { name, _ in name == "t3_thread_search" ? ["matches": []] : nil }
+        let copilot = Copilot(client: .fake(server), settings: .default, store: .ephemeral())
+        await #expect(throws: T3Error.needsModel) { try await copilot.ensureThread() }
+        #expect(server.calls(to: "t3_thread_launch").isEmpty)
+    }
+
+    @Test("picking a model switches the existing Copilot thread")
+    func switchesModel() async throws {
+        let server = FakeT3()
+        server.toolHandler = { name, _ in name == "t3_thread_configure" ? ["threadId": "copilot-1"] : nil }
+        let store = SharedStore.ephemeral()
+        store.copilotThreadID = "copilot-1"
+        let copilot = Copilot(client: .fake(server), settings: .default, store: store)
+        try await copilot.use(ModelSelection(instanceId: "codex", model: "gpt-6.2-sol"))
+        let configure = try #require(server.calls(to: "t3_thread_configure").first?.arguments)
+        #expect(configure["threadId"] == "copilot-1")
+        #expect(configure["modelSelection"]?["model"] == "gpt-6.2-sol")
+        #expect(configure["modelSelection"]?["instanceId"] == "codex")
+    }
+
+    @Test("the home folder project wins over deeper ones")
+    func homeProject() throws {
+        let list = try JSONValue.object(["projects": [
+            ["id": "deep", "title": "planista", "workspaceRoot": "/home/crabcake/Projects/planista"],
+            ["id": "home", "title": "crabcake", "workspaceRoot": "/home/crabcake"],
+            ["id": "all", "title": "Projects", "workspaceRoot": "/home/crabcake/Projects"],
+        ]]).decode(ProjectListResult.self)
+        #expect(Copilot.homeProject(in: list.projects)?.projectId == "home")
+    }
+
+    @Test("a Copilot thread in another project isn't reused")
+    func ignoresOtherProject() async throws {
+        let server = FakeT3()
+        server.toolHandler = { name, _ in
+            name == "t3_thread_search"
+                ? ["matches": [["threadId": "old", "projectId": "elsewhere", "title": "Tea Three Copilot"]]]
+                : nil
+        }
+        var settings = CopilotSettings.default
+        settings.projectId = "here"
+        settings.copilotModel = ModelSelection(instanceId: "claudeAgent", model: "claude-sonnet-5-5")
+        let copilot = Copilot(client: .fake(server), settings: settings, store: .ephemeral())
+        #expect(try await copilot.ensureThread() != "old")
+        #expect(server.calls(to: "t3_thread_launch").first?.arguments["projectId"] == "here")
+    }
 }
