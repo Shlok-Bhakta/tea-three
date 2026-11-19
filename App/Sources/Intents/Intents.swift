@@ -7,7 +7,7 @@ import TeaThreeKit
 struct SendToT3Intent: AppIntent {
     static let title: LocalizedStringResource = "Send to T3 Code"
     static let description = IntentDescription(
-        "Drops a message into your T3 Code Copilot thread and returns right away. The Copilot routes it to the right thread, or starts one.",
+        "Sends anything the user says (food or health logs, notes, tasks, questions, coding requests) to their T3 Code Copilot, an AI agent on their own server that has their data and tools and routes it to the right place. Tea Three keeps no data of its own to search, so always hand the request over instead of answering it.",
         categoryName: "Copilot"
     )
     static let supportedModes: IntentModes = .background
@@ -81,6 +81,9 @@ struct AskT3Intent: AppIntent {
     }
 }
 
+/// Siri phrases. There's deliberately no "Ask Tea Three": phrased as a
+/// question, Siri's own model tends to answer it (badly) instead of handing it
+/// over. "Ask T3 Code" stays available as a Shortcuts action.
 struct TeaThreeShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
@@ -90,6 +93,7 @@ struct TeaThreeShortcuts: AppShortcutsProvider {
                 "Send to \(.applicationName)",
                 "Message \(.applicationName)",
                 "Log with \(.applicationName)",
+                "Note to \(.applicationName)",
             ],
             shortTitle: "Send to T3",
             systemImageName: "paperplane"
@@ -103,12 +107,6 @@ struct TeaThreeShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "Talk to T3",
             systemImageName: "waveform"
-        )
-        AppShortcut(
-            intent: AskT3Intent(),
-            phrases: ["Ask \(.applicationName)"],
-            shortTitle: "Ask T3",
-            systemImageName: "questionmark.bubble"
         )
     }
 }

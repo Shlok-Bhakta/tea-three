@@ -34,7 +34,7 @@ state), so if T3 changes something and Tea Three breaks, your main app keeps wor
 
 | Where | How | What happens |
 |---|---|---|
-| Anywhere | **"Hey Siri, tell Tea Three"** → Siri asks "What should I send?" → talk | Siri says **"Sent."** and you're done. The Copilot handles it. If the server can't be reached, it's saved and sent the next time the app runs. |
+| Anywhere | **"Hey Siri, tell Tea Three"**, *stop*, Siri asks "What should I send?", then talk | Siri says **"Sent."** and you're done. The Copilot handles it. If the server can't be reached, it's saved and sent the next time the app runs. Say the phrase on its own: "Hey Siri, tell Tea Three I ate a burrito" in one breath, or anything phrased as a question, gets answered by Siri's own model, which never reaches Tea Three. |
 | Action button | Assign the **Talk to T3** shortcut | Opens straight into hands-free mode. Talk, hear the answer in Tea Three's voice (not Siri's), keep talking. Say "goodbye" to stop. |
 | CarPlay | Open Tea Three on the car screen | Same hands-free loop with CarPlay's voice template. Needs Apple's entitlement (see below). |
 | Shortcuts | **Ask T3 Code** action | Returns the Copilot's answer as text (≈25 s max) so you can chain it. |
