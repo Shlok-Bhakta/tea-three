@@ -1,4 +1,37 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#ea580c"/>
-  <text x="32" y="32" dy="0.35em" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="26" font-weight="600" fill="#ffffff">TT</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0.1" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#FDBA74"/>
+      <stop offset="0.45" stop-color="#F06A1D"/>
+      <stop offset="1" stop-color="#B8380A"/>
+    </linearGradient>
+    <linearGradient id="cup" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FFE9DA"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.36" r="0.5">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="20" stdDeviation="24" flood-color="#4A1500" flood-opacity="0.30"/>
+    </filter>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <rect width="1024" height="1024" fill="url(#glow)"/>
+
+  <g filter="url(#shadow)">
+    <!-- Steam that's also a voice waveform: three strands, the middle one loudest. -->
+    <g fill="none" stroke="#FFFFFF" stroke-width="52" stroke-linecap="round">
+      <path d="M384 452 C350 414 418 380 384 342 C366 322 372 304 384 290"/>
+      <path d="M512 452 C468 404 556 358 512 310 C468 262 556 218 512 170"/>
+      <path d="M640 452 C606 414 674 380 640 342 C618 318 628 290 640 254"/>
+    </g>
+    <!-- handle -->
+    <path d="M722 566 C838 556 852 724 704 734" fill="none" stroke="#FFF1E7" stroke-width="50" stroke-linecap="round"/>
+    <!-- cup -->
+    <path d="M270 528 Q270 508 290 508 H734 Q754 508 754 528 V596 C754 728 652 806 512 806 C372 806 270 728 270 596 Z" fill="url(#cup)"/>
+    <!-- saucer -->
+    <path d="M214 836 H810 C810 868 780 884 748 884 H276 C244 884 214 868 214 836 Z" fill="#FFFFFF"/>
+  </g>
 </svg>
