@@ -53,7 +53,7 @@ public enum CopilotPrompts {
     }
 
     /// Prefixes a dictated request with how its answer will be consumed.
-    public static func envelope(_ text: String, source: Source, date: Date = Date()) -> String {
+    public static func envelope(_ text: String, source: Source, attachmentCount: Int = 0, date: Date = Date()) -> String {
         let stamp = Self.timestamp(date)
         let tag: String
         switch source {
@@ -67,7 +67,13 @@ public enum CopilotPrompts {
         case .typed:
             tag = "[Tea Three · typed · \(stamp) · keep the reply brief.]"
         }
-        return "\(tag)\n\(text)"
+        let photos = switch attachmentCount {
+        case 0: ""
+        case 1: "\n[1 photo attached. Look at it; if work goes to another thread, describe what's in it there, since attachments don't carry over.]"
+        default: "\n[\(attachmentCount) photos attached. Look at them; if work goes to another thread, describe what's in them there, since attachments don't carry over.]"
+        }
+        let body = text.isEmpty && attachmentCount > 0 ? "(no words, just the photo)" : text
+        return "\(tag)\(photos)\n\(body)"
     }
 
     static func timestamp(_ date: Date) -> String {

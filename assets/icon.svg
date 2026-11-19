@@ -1,45 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0.45" y2="1">
-      <stop offset="0" stop-color="#FC9447"/>
-      <stop offset="0.5" stop-color="#EA5F14"/>
-      <stop offset="1" stop-color="#B9390A"/>
-    </linearGradient>
-    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#FFEDE2"/>
-    </linearGradient>
-    <radialGradient id="tea" cx="0.4" cy="0.35" r="0.75">
-      <stop offset="0" stop-color="#6B3317"/>
-      <stop offset="0.6" stop-color="#3E1A0A"/>
-      <stop offset="1" stop-color="#2A1006"/>
-    </radialGradient>
-    <linearGradient id="wave" gradientUnits="userSpaceOnUse" x1="0" y1="366" x2="0" y2="658">
-      <stop offset="0" stop-color="#FFD2AE"/>
-      <stop offset="1" stop-color="#FF9A55"/>
-    </linearGradient>
-    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#3D1100" flood-opacity="0.38"/>
-    </filter>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1F1D24"/><stop offset="1" stop-color="#09090B"/></linearGradient>
+    <linearGradient id="or" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#F0590F"/><stop offset="1" stop-color="#FDBA74"/></linearGradient>
   </defs>
   <rect width="1024" height="1024" fill="url(#bg)"/>
-
-  <!-- Cup from above: handle, rim, tea. Centered as a whole (cup + handle). -->
-  <g transform="translate(-34 0)" >
-    <g filter="url(#shadow)">
-      <path d="M 776 436 C 902 424 902 600 776 588" fill="none" stroke="#FFF3EA" stroke-width="62" stroke-linecap="round"/>
-      <circle cx="512" cy="512" r="304" fill="url(#rim)"/>
+  <g transform="translate(-24 30)">
+    <g fill="url(#or)">
+      <rect x="388" y="300" width="64" height="150" rx="32"/>
+      <rect x="500" y="200" width="64" height="250" rx="32"/>
+      <rect x="612" y="260" width="64" height="190" rx="32"/>
     </g>
-    <circle cx="512" cy="512" r="240" fill="url(#tea)"/>
-    <!-- inner lip shading -->
-    <circle cx="512" cy="512" r="240" fill="none" stroke="#000000" stroke-opacity="0.18" stroke-width="10"/>
-    <!-- the voice: a waveform on the tea -->
-    <g stroke="url(#wave)" stroke-width="46" stroke-linecap="round">
-      <line x1="372" y1="484" x2="372" y2="540"/>
-      <line x1="442" y1="420" x2="442" y2="604"/>
-      <line x1="512" y1="366" x2="512" y2="658"/>
-      <line x1="582" y1="430" x2="582" y2="594"/>
-      <line x1="652" y1="488" x2="652" y2="536"/>
-    </g>
+    <path d="M 300 528 H 764 V 590 C 764 712 664 790 532 790 C 400 790 300 712 300 590 Z" fill="none" stroke="#FFFFFF" stroke-width="56" stroke-linejoin="round"/>
+    <path d="M 792 560 C 880 560 880 680 776 690" fill="none" stroke="#FFFFFF" stroke-width="52" stroke-linecap="round"/>
   </g>
 </svg>

@@ -198,3 +198,35 @@ public struct OrchestratorCapabilities: Sendable, Codable {
         providers.first { !$0.models.isEmpty }.map { ModelSelection(instanceId: $0.providerInstanceId, model: $0.models[0].id) }
     }
 }
+
+// MARK: - Attachments
+
+/// A photo (or file) to send with a message. JPEG/PNG/GIF/WebP, at most 10 MB.
+public struct OutgoingAttachment: Sendable, Equatable {
+    public var data: Data
+    public var name: String
+    public var mimeType: String
+
+    public init(data: Data, name: String, mimeType: String) {
+        self.data = data
+        self.name = name
+        self.mimeType = mimeType
+    }
+
+    public var isImage: Bool { mimeType.hasPrefix("image/") }
+}
+
+/// An uploaded attachment, as `t3_thread_send_attachments` wants it.
+public struct UploadedAttachment: Sendable, Codable, Equatable {
+    public let type: String
+    public let id: String
+    public let name: String
+    public let mimeType: String
+    public let sizeBytes: Int
+}
+
+public struct AttachmentUploadTicket: Sendable, Codable {
+    public let attachmentId: String
+    /// Pre-signed path on the server's origin. POST the raw bytes there; no auth header.
+    public let relativeUrl: String
+}

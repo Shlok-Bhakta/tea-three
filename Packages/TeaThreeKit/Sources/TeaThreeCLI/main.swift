@@ -14,7 +14,7 @@ usage: tea-three <command> [args]
   record <dir>                    Save live responses as contract fixtures
   model <copilot|worker> <instance/model>   Set a default model (e.g. claudeAgent/claude-haiku-5-5)
   send <text...>                  Fire-and-forget to the Copilot thread (what Siri does)
-  ask <text...>                   Send to the Copilot and print its reply (what voice mode does)
+  ask [--photo <file>]... <text...>   Send to the Copilot and print its reply (what voice mode does)
 
 env:
   TEA_THREE_CREDENTIAL   credential file (default ~/.config/tea-three/credential.json)
@@ -91,8 +91,23 @@ func run() async throws {
         if !result.delivered { exit(1) }
 
     case "ask":
+        var words: [String] = []
+        var photos: [OutgoingAttachment] = []
+        var remaining = rest[...]
+        while let word = remaining.popFirst() {
+            guard word == "--photo" else { words.append(word); continue }
+            guard let path = remaining.popFirst() else { fail("--photo needs a file", code: 2) }
+            let url = URL(fileURLWithPath: path)
+            let mime = switch url.pathExtension.lowercased() {
+            case "png": "image/png"
+            case "gif": "image/gif"
+            case "webp": "image/webp"
+            default: "image/jpeg"
+            }
+            photos.append(OutgoingAttachment(data: try Data(contentsOf: url), name: url.lastPathComponent, mimeType: mime))
+        }
         let copilot = try service.copilot()
-        let reply = try await copilot.ask(rest.joined(separator: " "), source: .voice) { event in
+        let reply = try await copilot.ask(words.joined(separator: " "), source: .voice, attachments: photos) { event in
             if case .working(let elapsed) = event {
                 FileHandle.standardError.write(Data("… still working (\(Int(elapsed))s)\n".utf8))
             }

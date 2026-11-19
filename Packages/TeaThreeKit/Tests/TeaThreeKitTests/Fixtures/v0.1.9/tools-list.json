@@ -15,6 +15,69 @@
     "name" : "orchestrator_capabilities"
   },
   {
+    "description" : "Get an upload URL. POST the file's exact bytes to `relativeUrl` on this MCP server's HTTP origin, then send via `t3_thread_send_attachments` with the returned `attachmentId`.",
+    "inputSchema" : {
+      "properties" : {
+        "upload" : {
+          "properties" : {
+            "mimeType" : {
+              "anyOf" : [
+                {
+                  "enum" : [
+                    "image/gif",
+                    "image/jpeg",
+                    "image/png",
+                    "image/webp"
+                  ],
+                  "type" : "string"
+                },
+                {
+                  "type" : "string"
+                }
+              ]
+            },
+            "name" : {
+              "type" : "string"
+            },
+            "sizeBytes" : {
+              "anyOf" : [
+                {
+                  "maximum" : 10485760,
+                  "minimum" : 1,
+                  "type" : "integer"
+                },
+                {
+                  "maximum" : 52428800,
+                  "minimum" : 1,
+                  "type" : "integer"
+                }
+              ]
+            },
+            "type" : {
+              "enum" : [
+                "image",
+                "file"
+              ],
+              "type" : "string"
+            }
+          },
+          "required" : [
+            "type",
+            "name",
+            "mimeType",
+            "sizeBytes"
+          ],
+          "type" : "object"
+        }
+      },
+      "required" : [
+        "upload"
+      ],
+      "type" : "object"
+    },
+    "name" : "t3_attachment_prepare_upload"
+  },
+  {
     "description" : "List projects. Pages can shift.",
     "inputSchema" : {
       "properties" : {
@@ -44,18 +107,10 @@
         },
         "modelSelection" : {
           "properties" : {
-            "instanceId" : {
-
-            },
-            "model" : {
-
-            },
-            "options" : {
-
-            },
-            "provider" : {
-
-            }
+            "instanceId" : {},
+            "model" : {},
+            "options" : {},
+            "provider" : {}
           },
           "required" : [
             "model"
@@ -204,18 +259,10 @@
         },
         "modelSelection" : {
           "properties" : {
-            "instanceId" : {
-
-            },
-            "model" : {
-
-            },
-            "options" : {
-
-            },
-            "provider" : {
-
-            }
+            "instanceId" : {},
+            "model" : {},
+            "options" : {},
+            "provider" : {}
           },
           "required" : [
             "model"
@@ -486,6 +533,86 @@
       "type" : "object"
     },
     "name" : "t3_thread_send"
+  },
+  {
+    "description" : "Send uploaded attachments as a new message to a thread. No retry key. Target modes cannot exceed yours. Success does not mean the provider read them or finished.",
+    "inputSchema" : {
+      "properties" : {
+        "attachments" : {
+          "items" : {
+            "properties" : {
+              "id" : {
+                "type" : "string"
+              },
+              "mimeType" : {
+                "type" : "string"
+              },
+              "name" : {
+                "type" : "string"
+              },
+              "sizeBytes" : {
+                "anyOf" : [
+                  {
+                    "maximum" : 10485760,
+                    "minimum" : 0,
+                    "type" : "integer"
+                  },
+                  {
+                    "maximum" : 52428800,
+                    "minimum" : 1,
+                    "type" : "integer"
+                  }
+                ]
+              },
+              "source" : {
+                "properties" : {
+                  "_tag" : {
+                    "enum" : [
+                      "pasted-text"
+                    ],
+                    "type" : "string"
+                  }
+                },
+                "required" : [
+                  "_tag"
+                ],
+                "type" : "object"
+              },
+              "type" : {
+                "enum" : [
+                  "image",
+                  "file"
+                ],
+                "type" : "string"
+              }
+            },
+            "required" : [
+              "type",
+              "id",
+              "name",
+              "mimeType",
+              "sizeBytes"
+            ],
+            "type" : "object"
+          },
+          "maxItems" : 8,
+          "minItems" : 1,
+          "type" : "array"
+        },
+        "message" : {
+          "maxLength" : 120000,
+          "type" : "string"
+        },
+        "threadId" : {
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "attachments"
+      ],
+      "type" : "object"
+    },
+    "name" : "t3_thread_send_attachments"
   },
   {
     "description" : "Wait for a thread's run to finish. No `runId`: latest. Idle: at once. On timeout, with `next` end your turn; without, call again.",

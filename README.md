@@ -38,7 +38,7 @@ state), so if T3 changes something and Tea Three breaks, your main app keeps wor
 | Action button | Assign the **Talk to T3** shortcut | Opens straight into hands-free mode. Talk, hear the answer in Tea Three's voice (not Siri's), keep talking. Say "goodbye" to stop. |
 | CarPlay | Open Tea Three on the car screen | Same hands-free loop with CarPlay's voice template. Needs Apple's entitlement (see below). |
 | Shortcuts | **Ask T3 Code** action | Returns the Copilot's answer as text (≈25 s max) so you can chain it. |
-| In the app | Type or tap the mic | Same Copilot, with a transcript. |
+| In the app | Type or tap the mic | Same Copilot. Tap the camera to take or pick photos; they go with your next message, typed or spoken. |
 
 The Copilot is told how each message arrived (Siri, so nobody's listening;
 voice, so keep it short and speakable; typed) and to never settle its own thread.
@@ -100,7 +100,8 @@ T3's own agents use, instead of the official app's private WebSocket protocol:
   list.
 - **Tools used:** `t3_thread_send`, `t3_thread_launch`, `t3_thread_search`,
   `t3_thread_read`, `t3_thread_wait`, `t3_thread_organize`, `t3_thread_list`,
-  `t3_thread_configure`, `t3_thread_interrupt`, `t3_project_list`, `orchestrator_capabilities`.
+  `t3_thread_configure`, `t3_thread_interrupt`, `t3_project_list`, `orchestrator_capabilities`,
+  and for photos `t3_attachment_prepare_upload` + `t3_thread_send_attachments`.
 - **Why MCP:** it's a public, documented surface that T3's own CLI (`t3 thread`)
   is built on. It's versioned by the MCP spec, has idempotent `clientRequestId`
   retries, and doesn't depend on the orchestration WebSocket protocol number,

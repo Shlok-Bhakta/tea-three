@@ -97,6 +97,51 @@ public struct T3Client: Sendable {
         )
     }
 
+    /// Uploads one attachment: get a pre-signed URL, then POST the bytes to it.
+    public func upload(_ attachment: OutgoingAttachment) async throws -> UploadedAttachment {
+        struct Upload: Encodable {
+            let type: String
+            let name: String
+            let mimeType: String
+            let sizeBytes: Int
+        }
+        struct Args: Encodable { let upload: Upload }
+        let type = attachment.isImage ? "image" : "file"
+        let ticket = try await mcp.callTool(
+            "t3_attachment_prepare_upload",
+            Args(upload: Upload(type: type, name: attachment.name, mimeType: attachment.mimeType, sizeBytes: attachment.data.count)),
+            as: AttachmentUploadTicket.self
+        )
+        // The ticket path is relative to the server's origin, not to /mcp.
+        guard let url = URL(string: ticket.relativeUrl, relativeTo: mcp.endpoint)?.absoluteURL else {
+            throw T3Error.protocolMismatch("bad upload URL \(ticket.relativeUrl)")
+        }
+        var request = URLRequest(url: url, timeoutInterval: 120)
+        request.httpMethod = "POST"
+        request.setValue(attachment.mimeType, forHTTPHeaderField: "Content-Type")
+        request.httpBody = attachment.data
+        let (_, response) = try await mcp.transport.send(request)
+        guard (200..<300).contains(response.statusCode) else {
+            throw T3Error.transport("photo upload failed (HTTP \(response.statusCode))")
+        }
+        return UploadedAttachment(type: type, id: ticket.attachmentId, name: attachment.name, mimeType: attachment.mimeType, sizeBytes: attachment.data.count)
+    }
+
+    /// Sends a message with uploaded attachments. Like `send` with mode `auto`,
+    /// but T3 has no retry key for this tool.
+    public func sendAttachments(threadId: String, message: String, attachments: [UploadedAttachment]) async throws -> ThreadSendResult {
+        struct Args: Encodable {
+            let threadId: String
+            let message: String
+            let attachments: [UploadedAttachment]
+        }
+        return try await mcp.callTool(
+            "t3_thread_send_attachments",
+            Args(threadId: threadId, message: message, attachments: attachments),
+            as: ThreadSendResult.self
+        )
+    }
+
     /// Long-polls until the run finishes or `timeout` passes (then `timedOut == true`).
     public func wait(threadId: String, runId: String? = nil, timeout: TimeInterval = 25) async throws -> ThreadWaitResult {
         struct Args: Encodable {

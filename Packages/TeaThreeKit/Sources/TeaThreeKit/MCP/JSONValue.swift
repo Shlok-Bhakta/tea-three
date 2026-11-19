@@ -43,6 +43,11 @@ public enum JSONValue: Sendable, Hashable, Codable {
         return nil
     }
 
+    public subscript(index: Int) -> JSONValue? {
+        if case .array(let array) = self, array.indices.contains(index) { return array[index] }
+        return nil
+    }
+
     public var stringValue: String? {
         if case .string(let value) = self { return value }
         return nil

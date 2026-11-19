@@ -50,6 +50,9 @@ public enum ToolContract {
         Requirement("t3_thread_interrupt", arguments: ["threadId"], critical: false),
         Requirement("t3_project_list", arguments: ["limit"], critical: false),
         Requirement("orchestrator_capabilities", arguments: [], critical: false),
+        // Photos. Losing these only disables the camera button.
+        Requirement("t3_attachment_prepare_upload", arguments: ["upload"], critical: false),
+        Requirement("t3_thread_send_attachments", arguments: ["threadId", "message", "attachments"], critical: false),
     ]
 
     public struct Violation: Sendable, Hashable, CustomStringConvertible {

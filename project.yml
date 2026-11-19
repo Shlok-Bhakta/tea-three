@@ -43,7 +43,8 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         NSMicrophoneUsageDescription: Tea Three listens when you talk to your T3 Code Copilot.
         NSSpeechRecognitionUsageDescription: Tea Three turns what you say into a message for your T3 Code Copilot, on device.
-        NSCameraUsageDescription: Scan the pairing QR code from `t3 pair`.
+        NSCameraUsageDescription: Take a photo to send to your T3 Code Copilot, or scan the pairing QR code from `t3 pair`.
+        NSPhotoLibraryUsageDescription: Pick photos to send to your T3 Code Copilot.
         NSLocalNetworkUsageDescription: Tea Three talks to the T3 Code server on your Mac.
         # T3 Code on a LAN or tailnet IP is plain HTTP. Prefer an https *.ts.net
         # address (`t3 pair --tailscale`) if you can. Don't add NSAllowsLocalNetworking:

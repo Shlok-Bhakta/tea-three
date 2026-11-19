@@ -38,6 +38,9 @@ final class VoiceSession {
 
     static let stopPhrases = ["stop listening", "goodbye", "good bye", "that's all", "that is all", "we're done", "never mind"]
 
+    /// Supplies (and clears) photos to send with the next message.
+    var takeAttachments: () -> [OutgoingAttachment] = { [] }
+
     init(service: TeaThreeService) {
         self.service = service
     }
@@ -65,9 +68,16 @@ final class VoiceSession {
     /// Typed messages use the same Copilot, without the mic.
     func sendTyped(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        turns.append(Turn(role: .you, text: trimmed))
-        await respond(to: trimmed, source: .typed, speak: false)
+        let photos = takeAttachments()
+        guard !trimmed.isEmpty || !photos.isEmpty else { return }
+        turns.append(Turn(role: .you, text: Self.label(trimmed, photos: photos.count)))
+        await respond(to: trimmed, source: .typed, speak: false, attachments: photos)
+    }
+
+    private static func label(_ text: String, photos: Int) -> String {
+        guard photos > 0 else { return text }
+        let tag = photos == 1 ? "📷" : "📷×\(photos)"
+        return text.isEmpty ? tag : "\(tag) \(text)"
     }
 
     // MARK: Loop
@@ -114,18 +124,19 @@ final class VoiceSession {
                 await say("Okay.")
                 return
             }
-            turns.append(Turn(role: .you, text: heard))
-            await respond(to: heard, source: .voice, speak: settings.speakReplies)
+            let photos = takeAttachments()
+            turns.append(Turn(role: .you, text: Self.label(heard, photos: photos.count)))
+            await respond(to: heard, source: .voice, speak: settings.speakReplies, attachments: photos)
         }
     }
 
-    private func respond(to text: String, source: CopilotPrompts.Source, speak: Bool) async {
+    private func respond(to text: String, source: CopilotPrompts.Source, speak: Bool, attachments: [OutgoingAttachment] = []) async {
         phase = .thinking
         let reply: String
         do {
             let copilot = try service.copilot()
             let blocked = Flag()
-            let answer = try await copilot.ask(text, source: source) { event in
+            let answer = try await copilot.ask(text, source: source, attachments: attachments) { event in
                 switch event {
                 case .working(let elapsed) where elapsed > 18 && elapsed < 40 && speak:
                     await self.say("Still working on it.", resume: .thinking)

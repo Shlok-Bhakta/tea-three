@@ -268,3 +268,59 @@ struct ModelChoiceTests {
         #expect(server.calls(to: "t3_thread_launch").first?.arguments["projectId"] == "here")
     }
 }
+
+@Suite("Photos")
+struct PhotoTests {
+    func server() -> FakeT3 {
+        let server = FakeT3()
+        server.toolHandler = { name, args in
+            switch name {
+            case "t3_attachment_prepare_upload":
+                let name = args["upload"]?["name"]?.stringValue ?? "x"
+                return ["attachmentId": .string("pending-\(name)"), "relativeUrl": .string("/api/attachments/upload/signed-\(name)"), "expiresAt": 1]
+            case "t3_thread_send_attachments":
+                return ["threadId": args["threadId"] ?? "", "messageId": "m1", "runId": "r1", "status": "running"]
+            default:
+                return nil
+            }
+        }
+        return server
+    }
+
+    @Test("photos are uploaded to the signed URL, then sent with the message")
+    func sendsPhotos() async throws {
+        let server = server()
+        let store = SharedStore.ephemeral()
+        store.copilotThreadID = "copilot-1"
+        let copilot = Copilot(client: .fake(server), settings: .default, store: store)
+        let photo = OutgoingAttachment(data: Data([0xFF, 0xD8, 0xFF, 0x01]), name: "fridge.jpg", mimeType: "image/jpeg")
+
+        let sent = try await copilot.send("what can I cook with this", source: .typed, attachments: [photo])
+        #expect(sent.runId == "r1")
+
+        let prepare = try #require(server.calls(to: "t3_attachment_prepare_upload").first?.arguments)
+        #expect(prepare["upload"]?["type"] == "image")
+        #expect(prepare["upload"]?["mimeType"] == "image/jpeg")
+        #expect(prepare["upload"]?["sizeBytes"] == 4)
+        #expect(server.uploads["/api/attachments/upload/signed-fridge.jpg"] == photo.data)
+
+        let send = try #require(server.calls(to: "t3_thread_send_attachments").first?.arguments)
+        #expect(send["threadId"] == "copilot-1")
+        #expect(send["attachments"]?[0]?["id"] == "pending-fridge.jpg")
+        #expect(send["attachments"]?[0]?["sizeBytes"] == 4)
+        #expect(send["message"]?.stringValue?.contains("1 photo attached") == true)
+        #expect(send["message"]?.stringValue?.contains("what can I cook with this") == true)
+        #expect(server.calls(to: "t3_thread_send").isEmpty)
+    }
+
+    @Test("without photos, the normal send is used")
+    func noPhotos() async throws {
+        let server = server()
+        let store = SharedStore.ephemeral()
+        store.copilotThreadID = "copilot-1"
+        _ = try await Copilot(client: .fake(server), settings: .default, store: store).send("hi", source: .typed)
+        #expect(server.calls(to: "t3_attachment_prepare_upload").isEmpty)
+        #expect(server.calls(to: "t3_thread_send_attachments").isEmpty)
+        #expect(server.calls(to: "t3_thread_send").count == 1)
+    }
+}

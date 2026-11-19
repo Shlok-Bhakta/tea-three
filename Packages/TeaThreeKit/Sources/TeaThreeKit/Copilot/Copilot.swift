@@ -93,19 +93,34 @@ public actor Copilot {
 
     /// Fire-and-forget: returns once T3 has accepted the message.
     @discardableResult
-    public func send(_ text: String, source: CopilotPrompts.Source, requestID: String = UUID().uuidString) async throws -> ThreadSendResult {
+    public func send(
+        _ text: String,
+        source: CopilotPrompts.Source,
+        attachments: [OutgoingAttachment] = [],
+        requestID: String = UUID().uuidString
+    ) async throws -> ThreadSendResult {
         let threadId = try await ensureThread()
-        let message = CopilotPrompts.envelope(text, source: source)
+        let message = CopilotPrompts.envelope(text, source: source, attachmentCount: attachments.count)
+        // Uploads aren't tied to a thread, so a rebuilt thread can reuse them.
+        var uploads: [UploadedAttachment] = []
+        for attachment in attachments {
+            uploads.append(try await client.upload(attachment))
+        }
+        let uploaded = uploads
         // Independent drops from Siri queue behind whatever is running; a live
         // conversation steers it, like interrupting a person mid-sentence.
         let mode: SendMode = source == .siri ? .queue : .auto
+        func deliver(to threadId: String) async throws -> ThreadSendResult {
+            uploaded.isEmpty
+                ? try await client.send(threadId: threadId, message: message, mode: mode, clientRequestId: requestID)
+                : try await client.sendAttachments(threadId: threadId, message: message, attachments: uploaded)
+        }
         do {
-            return try await client.send(threadId: threadId, message: message, mode: mode, clientRequestId: requestID)
+            return try await deliver(to: threadId)
         } catch T3Error.tool(_, let code, _) where code == "not_found" {
             // Someone deleted the Copilot thread. Rebuild it and retry once.
             reset()
-            let rebuilt = try await ensureThread()
-            return try await client.send(threadId: rebuilt, message: message, mode: mode, clientRequestId: requestID)
+            return try await deliver(to: try await ensureThread())
         }
     }
 
@@ -113,10 +128,11 @@ public actor Copilot {
     public func ask(
         _ text: String,
         source: CopilotPrompts.Source = .voice,
+        attachments: [OutgoingAttachment] = [],
         waitWindow: TimeInterval = 20,
         onEvent: @Sendable (Event) async -> Void = { _ in }
     ) async throws -> String? {
-        let sent = try await send(text, source: source)
+        let sent = try await send(text, source: source, attachments: attachments)
         await onEvent(.sent(threadId: sent.threadId, runId: sent.runId))
         let start = Date()
 

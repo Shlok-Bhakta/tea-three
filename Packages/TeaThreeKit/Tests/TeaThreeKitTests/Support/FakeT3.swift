@@ -46,7 +46,15 @@ final class FakeT3: HTTPTransport, @unchecked Sendable {
     var methods: [String] { lock.withLock { _methods } }
     func calls(to tool: String) -> [Call] { calls.filter { $0.tool == tool } }
 
+    /// Raw bodies POSTed to attachment upload URLs, keyed by path.
+    var uploads: [String: Data] { lock.withLock { _uploads } }
+    private var _uploads: [String: Data] = [:]
+
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        if let path = request.url?.path, path.hasPrefix("/api/attachments/upload/") {
+            lock.withLock { _uploads[path] = request.httpBody ?? Data() }
+            return (Data(), response(request, status: 204))
+        }
         let body = try JSONDecoder().decode(JSONValue.self, from: request.httpBody ?? Data("{}".utf8))
         let method = body["method"]?.stringValue ?? ""
         lock.withLock { _methods.append(method) }

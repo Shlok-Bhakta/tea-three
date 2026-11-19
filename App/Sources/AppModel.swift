@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UIKit
 import TeaThreeKit
 
 /// The one service instance. Nonisolated so App Intents can reach it from
@@ -32,6 +33,8 @@ final class AppModel {
     private(set) var projects: [ProjectListResult.Project] = []
     private(set) var contractReport: String?
     private(set) var outboxCount = 0
+    /// Photos that go out with the next message, typed or spoken.
+    private(set) var pendingPhotos: [PendingPhoto] = []
     var lastError: String?
 
     var isPaired: Bool { credential != nil }
@@ -44,6 +47,7 @@ final class AppModel {
         self.settings = service.store.settings
         self.contractReport = service.store.lastContractReport
         self.outboxCount = service.store.outbox.count
+        voice.takeAttachments = { [weak self] in self?.takePendingAttachments() ?? [] }
     }
 
     // MARK: Pairing
@@ -88,6 +92,23 @@ final class AppModel {
             await copilot.flushOutbox()
         }
         outboxCount = service.store.outbox.count
+    }
+
+    // MARK: Photos
+
+    func addPhoto(_ image: UIImage) {
+        guard pendingPhotos.count < 8, let photo = PendingPhoto(image) else { return }
+        pendingPhotos.append(photo)
+    }
+
+    func removePhoto(_ id: UUID) {
+        pendingPhotos.removeAll { $0.id == id }
+    }
+
+    /// Hands the pending photos to a message and clears them.
+    func takePendingAttachments() -> [OutgoingAttachment] {
+        defer { pendingPhotos = [] }
+        return pendingPhotos.map(\.attachment)
     }
 
     // MARK: Choices

@@ -63,7 +63,10 @@ struct HomeView: View {
 
             Text(status).font(.callout).foregroundStyle(.secondary)
 
+            PendingPhotosStrip()
             HStack {
+                PhotoButton()
+                    .disabled(model.settings.copilotModel == nil)
                 TextField("Or type…", text: $typed)
                     .textFieldStyle(.roundedBorder)
                     .focused($typing)
@@ -72,7 +75,7 @@ struct HomeView: View {
                 Button("Send", systemImage: "arrow.up.circle.fill", action: sendTyped)
                     .labelStyle(.iconOnly)
                     .font(.title2)
-                    .disabled(typed.isEmpty || model.settings.copilotModel == nil)
+                    .disabled((typed.isEmpty && model.pendingPhotos.isEmpty) || model.settings.copilotModel == nil)
             }
         }
         .padding()

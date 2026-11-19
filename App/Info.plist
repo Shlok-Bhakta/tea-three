@@ -39,11 +39,13 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Scan the pairing QR code from `t3 pair`.</string>
+	<string>Take a photo to send to your T3 Code Copilot, or scan the pairing QR code from `t3 pair`.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Tea Three talks to the T3 Code server on your Mac.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Tea Three listens when you talk to your T3 Code Copilot.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Pick photos to send to your T3 Code Copilot.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Tea Three turns what you say into a message for your T3 Code Copilot, on device.</string>
 	<key>UIApplicationSceneManifest</key>
