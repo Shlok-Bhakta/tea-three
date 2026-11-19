@@ -51,6 +51,7 @@ final class VoiceSession {
 
     func start() {
         guard loop == nil else { return }
+        NaturalVoiceEngine.shared.prewarm()
         isRunning = true
         loop = Task { await run() }
     }

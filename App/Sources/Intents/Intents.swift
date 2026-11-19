@@ -51,7 +51,7 @@ struct TalkToT3Intent: AppIntent {
 struct AskT3Intent: AppIntent {
     static let title: LocalizedStringResource = "Ask T3 Code"
     static let description = IntentDescription(
-        "Sends a message to your T3 Code Copilot and waits briefly for its answer. Long jobs keep running in T3 Code.",
+        "Asks the user's T3 Code Copilot (an AI agent on their own server with their health, food, notes, finances, and code) and reads back its answer. Tea Three keeps no data of its own, so hand any question about that data to this action instead of answering it.",
         categoryName: "Copilot"
     )
     static let supportedModes: IntentModes = .background
@@ -81,9 +81,9 @@ struct AskT3Intent: AppIntent {
     }
 }
 
-/// Siri phrases. There's deliberately no "Ask Tea Three": phrased as a
-/// question, Siri's own model tends to answer it (badly) instead of handing it
-/// over. "Ask T3 Code" stays available as a Shortcuts action.
+/// Siri phrases. Each one must be said on its own ("Hey Siri, ask Tea Three"),
+/// then Siri asks for the message: iOS 26 can't take free text in the same
+/// breath, and a whole sentence goes to Siri's own model instead of the app.
 struct TeaThreeShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
@@ -107,6 +107,17 @@ struct TeaThreeShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "Talk to T3",
             systemImageName: "waveform"
+        )
+        AppShortcut(
+            intent: AskT3Intent(),
+            phrases: [
+                "Ask \(.applicationName)",
+                "Ask \(.applicationName) something",
+                "Check with \(.applicationName)",
+                "Question for \(.applicationName)",
+            ],
+            shortTitle: "Ask T3",
+            systemImageName: "questionmark.bubble"
         )
     }
 }

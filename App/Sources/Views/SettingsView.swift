@@ -61,7 +61,7 @@ struct SettingsView: View {
                     NavigationLink {
                         VoicePicker().themed()
                     } label: {
-                        LabeledContent("Voice", value: Speaker.chosenVoice()?.name ?? "Default")
+                        LabeledContent("Voice", value: Speaker.selectedName)
                     }
                     LabeledContent("Pause to send") {
                         Stepper(String(format: "%.1f s", model.settings.endOfSpeechSilence), value: $model.settings.endOfSpeechSilence, in: 0.8...4, step: 0.2)

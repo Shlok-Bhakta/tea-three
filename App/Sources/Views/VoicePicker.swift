@@ -7,15 +7,33 @@ struct VoicePicker: View {
     @AppStorage(Speaker.voiceKey) private var voiceID = ""
     @AppStorage(Speaker.rateKey) private var rate = 1.0
     @State private var voices = Speaker.availableVoices()
-    @State private var preview = AVSpeechSynthesizer()
+    @State private var preview = Speaker()
     @State private var personalVoice = AVSpeechSynthesizer.personalVoiceAuthorizationStatus
 
-    private var selectedID: String { voiceID.isEmpty ? (voices.first?.identifier ?? "") : voiceID }
+    private var selectedID: String { voiceID.isEmpty ? Speaker.selectedIdentifier : voiceID }
     private var hasGoodVoice: Bool { voices.contains { $0.quality != .default } }
 
     var body: some View {
         List {
-            if !hasGoodVoice {
+            if NaturalVoice.isAvailable {
+                Section {
+                    ForEach(NaturalVoice.voices) { voice in
+                        let id = NaturalVoice.identifierPrefix + voice.id
+                        Button {
+                            voiceID = id
+                            play(id)
+                        } label: {
+                            VoiceRow(name: voice.name, detail: voice.kind, badge: "Natural", selected: id == selectedID)
+                        }
+                    }
+                } header: {
+                    Text("Natural voices")
+                } footer: {
+                    Text("Generated on your iPhone by Kyutai's Pocket TTS, as used in MB Books. Nothing leaves the phone.")
+                }
+            }
+
+            if !NaturalVoice.isAvailable && !hasGoodVoice {
                 Section {
                     Label {
                         Text("Only basic voices are installed. Add a Premium one (Ava, Zoe, Evan, Nathan…) for free: open iOS Settings, search for “Voices”, pick English, and download one. It shows up here.")
@@ -42,30 +60,16 @@ struct VoicePicker: View {
                         voiceID = voice.identifier
                         play(voice.identifier)
                     } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(voice.name).foregroundStyle(theme.foreground)
-                                Text(Locale.current.localizedString(forIdentifier: voice.language) ?? voice.language)
-                                    .font(.caption)
-                                    .foregroundStyle(theme.foregroundSecondary)
-                            }
-                            Spacer()
-                            if let badge = badge(for: voice) {
-                                Text(badge)
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(theme.primaryText)
-                                    .padding(.horizontal, 7)
-                                    .padding(.vertical, 3)
-                                    .background(theme.primary.opacity(0.16), in: Capsule())
-                            }
-                            if voice.identifier == selectedID {
-                                Image(systemName: "checkmark").fontWeight(.semibold).foregroundStyle(theme.primaryText)
-                            }
-                        }
+                        VoiceRow(
+                            name: voice.name,
+                            detail: Locale.current.localizedString(forIdentifier: voice.language) ?? voice.language,
+                            badge: badge(for: voice),
+                            selected: voice.identifier == selectedID
+                        )
                     }
                 }
             } header: {
-                Text("Voices on this iPhone")
+                Text("iPhone voices")
             } footer: {
                 Text("Premium and Enhanced voices sound far more natural. More can be downloaded in iOS Settings › Accessibility (search “Voices”).")
             }
@@ -88,7 +92,7 @@ struct VoicePicker: View {
         .scrollContentBackground(.hidden)
         .background(ThemeBackground())
         .navigationTitle("Voice")
-        .onDisappear { preview.stopSpeaking(at: .immediate) }
+        .onDisappear { preview.stop() }
     }
 
     private func badge(for voice: AVSpeechSynthesisVoice) -> String? {
@@ -100,11 +104,37 @@ struct VoicePicker: View {
         }
     }
 
+    /// Plays a sample in the voice just picked (it's already saved as the choice).
     private func play(_ id: String) {
-        preview.stopSpeaking(at: .immediate)
-        let utterance = AVSpeechUtterance(string: "Got it. I sent that to your Health thread, and the build on crabcake is still running.")
-        utterance.voice = AVSpeechSynthesisVoice(identifier: id)
-        utterance.rate = min(AVSpeechUtteranceMaximumSpeechRate, AVSpeechUtteranceDefaultSpeechRate * Float(rate))
-        preview.speak(utterance)
+        Task { await preview.speak("Got it. I logged that in your food thread, and the build on crabcake is still running.") }
+    }
+}
+
+private struct VoiceRow: View {
+    @Environment(\.theme) private var theme
+    let name: String
+    let detail: String
+    let badge: String?
+    let selected: Bool
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name).foregroundStyle(theme.foreground)
+                Text(detail).font(.caption).foregroundStyle(theme.foregroundSecondary)
+            }
+            Spacer()
+            if let badge {
+                Text(badge)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(theme.primaryText)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(theme.primary.opacity(0.16), in: Capsule())
+            }
+            if selected {
+                Image(systemName: "checkmark").fontWeight(.semibold).foregroundStyle(theme.primaryText)
+            }
+        }
     }
 }

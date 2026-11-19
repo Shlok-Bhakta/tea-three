@@ -14,11 +14,40 @@ final class Speaker: NSObject {
         synthesizer.delegate = self
     }
 
+    private lazy var natural = NaturalVoicePlayer()
+
+    /// The selected voice's identifier: a natural voice ("pocket:george") or an
+    /// iPhone voice. Natural voices are the default when they're embedded.
+    static var selectedIdentifier: String {
+        if let id = UserDefaults.standard.string(forKey: voiceKey), !id.isEmpty,
+           NaturalVoice.voice(forIdentifier: id) == nil || NaturalVoice.isAvailable
+        {
+            return id
+        }
+        if NaturalVoice.isAvailable { return NaturalVoice.identifierPrefix + NaturalVoice.voices[0].id }
+        return availableVoices().first?.identifier ?? ""
+    }
+
+    static var selectedName: String {
+        let id = selectedIdentifier
+        return NaturalVoice.voice(forIdentifier: id)?.name ?? AVSpeechSynthesisVoice(identifier: id)?.name ?? "Default"
+    }
+
     func speak(_ text: String) async {
         stop()
+        let rate = UserDefaults.standard.object(forKey: Self.rateKey) as? Double ?? 1.0
+        if let voice = NaturalVoice.voice(forIdentifier: Self.selectedIdentifier) {
+            do {
+                try await natural.speak(Self.speakable(text), voice: voice.id, rate: rate)
+                return
+            } catch is CancellationError {
+                return
+            } catch {
+                // Fall through to an iPhone voice rather than staying silent.
+            }
+        }
         let utterance = AVSpeechUtterance(string: Self.speakable(text))
         utterance.voice = Self.chosenVoice()
-        let rate = UserDefaults.standard.object(forKey: Self.rateKey) as? Double ?? 1.0
         utterance.rate = min(AVSpeechUtteranceMaximumSpeechRate, AVSpeechUtteranceDefaultSpeechRate * Float(rate))
         utterance.prefersAssistiveTechnologySettings = false
         utterance.postUtteranceDelay = 0.1
@@ -30,6 +59,7 @@ final class Speaker: NSObject {
 
     func stop() {
         if synthesizer.isSpeaking { synthesizer.stopSpeaking(at: .immediate) }
+        natural.stop()
         finish()
     }
 
@@ -38,11 +68,9 @@ final class Speaker: NSObject {
         continuation = nil
     }
 
+    /// The iPhone voice to use: the selected one, or the best installed.
     static func chosenVoice() -> AVSpeechSynthesisVoice? {
-        if let id = UserDefaults.standard.string(forKey: voiceKey), let voice = AVSpeechSynthesisVoice(identifier: id) {
-            return voice
-        }
-        return availableVoices().first
+        AVSpeechSynthesisVoice(identifier: selectedIdentifier) ?? availableVoices().first
     }
 
     /// English voices, best first: premium, then enhanced, then the rest; the

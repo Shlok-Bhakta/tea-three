@@ -8,6 +8,7 @@ struct HomeView: View {
     @Environment(\.theme) private var theme
     @State private var showSettings = false
     @State private var showModels = false
+    @State private var showVoices = false
     @State private var typed = ""
     @FocusState private var typing: Bool
 
@@ -45,11 +46,19 @@ struct HomeView: View {
                 switch ProcessInfo.processInfo.environment["TEA_THREE_OPEN"] {
                 case "models": showModels = true
                 case "settings": showSettings = true
+                case "voice": showVoices = true
                 default: break
+                }
+                if let text = ProcessInfo.processInfo.environment["TEA_THREE_SAY"] {
+                    let started = Date()
+                    let samples = try? await NaturalVoiceEngine.shared.synthesize(text, voice: "george")
+                    print("TEA_THREE_SAY natural=\(NaturalVoice.isAvailable) samples=\(samples?.count ?? -1) in \(Date().timeIntervalSince(started))s")
+                    await Speaker().speak(text)
                 }
             }
             #endif
             .sheet(isPresented: $showSettings) { SettingsView().themed() }
+            .sheet(isPresented: $showVoices) { NavigationStack { VoicePicker() }.themed() }
             .sheet(isPresented: $showModels) {
                 ModelSheet().themed().presentationDetents([.medium, .large])
             }
