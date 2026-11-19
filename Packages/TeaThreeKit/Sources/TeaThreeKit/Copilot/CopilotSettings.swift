@@ -17,8 +17,14 @@ public struct CopilotSettings: Sendable, Codable, Equatable {
     public var extraInstructions: String
     /// Speak replies in voice mode.
     public var speakReplies: Bool
-    /// Seconds of silence that end an utterance in voice mode.
+    /// Legacy fixed end-of-speech silence; superseded by `turnPause`.
     public var endOfSpeechSilence: Double
+    /// Seconds of silence after a finished sentence before voice mode sends.
+    /// Unfinished thoughts ("and", "um", a comma) get longer automatically.
+    /// `nil` means `TurnDetector.defaultPause`.
+    public var turnPause: Double?
+
+    public var turnDetector: TurnDetector { TurnDetector(pause: turnPause ?? TurnDetector.defaultPause) }
 
     public init(
         threadTitle: String = "Tea Three Copilot",

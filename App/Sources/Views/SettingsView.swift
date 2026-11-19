@@ -56,16 +56,27 @@ struct SettingsView: View {
                     Text("For example: “Food logs go to the Health project using the food-log skill. Snooze anything I say to do later until tomorrow 9am.”")
                 }
 
-                Section("Voice") {
+                Section {
                     Toggle("Speak replies", isOn: $model.settings.speakReplies)
                     NavigationLink {
                         VoicePicker().themed()
                     } label: {
                         LabeledContent("Voice", value: Speaker.selectedName)
                     }
-                    LabeledContent("Pause to send") {
-                        Stepper(String(format: "%.1f s", model.settings.endOfSpeechSilence), value: $model.settings.endOfSpeechSilence, in: 0.8...4, step: 0.2)
+                    LabeledContent("Pause before sending") {
+                        Stepper(
+                            String(format: "%.1f s", model.settings.turnPause ?? TurnDetector.defaultPause),
+                            value: Binding(
+                                get: { model.settings.turnPause ?? TurnDetector.defaultPause },
+                                set: { model.settings.turnPause = $0 }
+                            ),
+                            in: 1.0...5.0, step: 0.25
+                        )
                     }
+                } header: {
+                    Text("Voice")
+                } footer: {
+                    Text("After a finished sentence. If you trail off on “um”, “and”, “but”, or a comma, it waits about 2.5 s longer, and “wait” or “hold on” holds it longer still. A soft tick plays a second before sending; keep talking to continue. Say “send it” to send right away.")
                 }
 
                 Section("Server") {

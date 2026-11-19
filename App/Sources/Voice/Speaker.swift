@@ -1,4 +1,5 @@
 import AVFoundation
+import UIKit
 
 /// Text-to-speech in Tea Three's own voice (not Siri's). The voice and rate
 /// come from Settings; with nothing picked, the best installed English voice.
@@ -129,4 +130,9 @@ enum Earcon {
     // Built-in "begin/end recording" tones, the same ones dictation uses.
     static func listening() { AudioServicesPlaySystemSound(1113) }
     static func heard() { AudioServicesPlaySystemSound(1114) }
+    /// A quiet tick plus a soft haptic, a second before a turn is sent.
+    static func aboutToSend() {
+        AudioServicesPlaySystemSound(1104)
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+    }
 }

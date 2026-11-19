@@ -108,8 +108,11 @@ final class VoiceSession {
             Earcon.listening()
             let heard: String
             do {
-                heard = try await listener.listen(silence: settings.endOfSpeechSilence) { text in
+                heard = try await listener.listen(detector: settings.turnDetector) { text in
                     Task { @MainActor in self.partial = text }
+                } onWarning: {
+                    // About to send: a soft tick and tap. Keep talking to hold the turn.
+                    Task { @MainActor in Earcon.aboutToSend() }
                 }
             } catch {
                 note(error.localizedDescription)
