@@ -1,0 +1,94 @@
+import Foundation
+import Observation
+import TeaThreeKit
+
+/// The one service instance. Nonisolated so App Intents can reach it from
+/// whatever executor they run on.
+enum Shared {
+    // Intents run in-process, so the app's own Keychain and defaults are
+    // enough. Move to an App Group if a widget/control extension is added.
+    nonisolated static let service = TeaThreeService(credentials: KeychainCredentialStore(), store: SharedStore(defaults: .standard))
+}
+
+/// App-wide state, shared by the phone UI, the CarPlay scene, and App Intents
+/// (which run in the app's process).
+@Observable
+final class AppModel {
+    static let shared = AppModel()
+
+    let service: TeaThreeService
+    let voice: VoiceSession
+
+    private(set) var credential: T3Credential?
+    var settings: CopilotSettings {
+        didSet { service.store.settings = settings }
+    }
+    private(set) var capabilities: OrchestratorCapabilities?
+    private(set) var projects: [ProjectListResult.Project] = []
+    private(set) var contractReport: String?
+    private(set) var outboxCount = 0
+    var lastError: String?
+
+    var isPaired: Bool { credential != nil }
+
+    private init() {
+        let service = Shared.service
+        self.service = service
+        self.voice = VoiceSession(service: service)
+        self.credential = service.credentials.load()
+        self.settings = service.store.settings
+        self.contractReport = service.store.lastContractReport
+        self.outboxCount = service.store.outbox.count
+    }
+
+    // MARK: Pairing
+
+    func pair(_ link: PairingLink, access: MCPOAuth.Access) async throws {
+        credential = try await service.pair(link, access: access)
+        await refresh()
+    }
+
+    func unpair() {
+        voice.stop()
+        service.unpair()
+        credential = nil
+        capabilities = nil
+        projects = []
+    }
+
+    // MARK: Server state
+
+    func refresh() async {
+        guard isPaired else { return }
+        do {
+            let client = try service.client()
+            async let capabilities = client.capabilities()
+            async let projects = client.projects()
+            self.capabilities = try await capabilities
+            self.projects = try await projects
+            _ = try await service.checkContract()
+            contractReport = service.store.lastContractReport
+            lastError = nil
+        } catch let error as T3Error {
+            lastError = error.errorDescription
+            if case .unauthorized = error { credential = nil }
+        } catch {
+            lastError = error.localizedDescription
+        }
+        await flushOutbox()
+    }
+
+    func flushOutbox() async {
+        if let copilot = try? service.copilot() {
+            await copilot.flushOutbox()
+        }
+        outboxCount = service.store.outbox.count
+    }
+
+    /// Forgets the cached Copilot thread; the next message finds or recreates it.
+    func resetCopilotThread() {
+        service.store.copilotThreadID = nil
+    }
+
+    var copilotThreadID: String? { service.store.copilotThreadID }
+}

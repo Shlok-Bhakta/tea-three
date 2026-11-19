@@ -1,0 +1,62 @@
+{
+  "currentThreadId" : null,
+  "nextCursor" : null,
+  "projectId" : null,
+  "threads" : [
+    {
+      "createdAt" : "2026-11-19T01:02:38.959Z",
+      "createdBy" : "agent",
+      "creationSource" : "mcp",
+      "interactionMode" : "default",
+      "itemCount" : 0,
+      "latestRunId" : null,
+      "link" : "https://app.t3.codes/threads/8725cff2-f0ed-4077-841f-e1b9080ad041/mcp%3Alaunch%3A0e4fac8acca0675bf8af1f44efe0d20e363748bbb3fe294859715df5280fc00d",
+      "linkedPullRequest" : null,
+      "model" : "claude-sonnet-5-5",
+      "parentThreadId" : null,
+      "projectId" : "f5d40789-8ddf-4d0b-8748-70c4a1d8a009",
+      "providerInstanceId" : "claudeAgent",
+      "pullRequests" : [
+
+      ],
+      "relationshipToParent" : null,
+      "runtimeMode" : "auto",
+      "settled" : false,
+      "settledAt" : null,
+      "snoozed" : false,
+      "snoozedUntil" : null,
+      "status" : "idle",
+      "threadId" : "mcp:launch:0e4fac8acca0675bf8af1f44efe0d20e363748bbb3fe294859715df5280fc00d",
+      "title" : "tea-three fixture 487350D3",
+      "updatedAt" : "2026-11-19T01:02:38.966Z"
+    },
+    {
+      "createdAt" : "2026-11-19T00:54:38.155Z",
+      "createdBy" : "agent",
+      "creationSource" : "mcp",
+      "interactionMode" : "default",
+      "itemCount" : 16,
+      "latestRunId" : "run:thread:mcp%3Alaunch%3A23b6f73da08eee39995a44277c23247dfee4daab00713603b29a7865a2350154:ordinal:3",
+      "link" : "https://app.t3.codes/threads/8725cff2-f0ed-4077-841f-e1b9080ad041/mcp%3Alaunch%3A23b6f73da08eee39995a44277c23247dfee4daab00713603b29a7865a2350154",
+      "linkedPullRequest" : null,
+      "model" : "claude-haiku-5-5",
+      "parentThreadId" : null,
+      "projectId" : "f5d40789-8ddf-4d0b-8748-70c4a1d8a009",
+      "providerInstanceId" : "claudeAgent",
+      "pullRequests" : [
+
+      ],
+      "relationshipToParent" : null,
+      "runtimeMode" : "auto",
+      "settled" : false,
+      "settledAt" : null,
+      "snoozed" : false,
+      "snoozedUntil" : null,
+      "status" : "completed",
+      "threadId" : "mcp:launch:23b6f73da08eee39995a44277c23247dfee4daab00713603b29a7865a2350154",
+      "title" : "Tea Three Copilot",
+      "updatedAt" : "2026-11-19T01:02:11.121Z"
+    }
+  ],
+  "total" : 2
+}

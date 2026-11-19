@@ -1,0 +1,461 @@
+{
+  "features" : {
+    "appOwnedSubagents" : true,
+    "asyncPolling" : true,
+    "batchThreadCreation" : true,
+    "cancellation" : true,
+    "incrementalThreadRead" : true,
+    "maxBatchThreads" : 20,
+    "scheduledTasks" : true,
+    "threadManagement" : true
+  },
+  "inheritedModel" : null,
+  "inheritedOptions" : [
+
+  ],
+  "inheritedProviderInstanceId" : null,
+  "interactionMode" : "default",
+  "parentThreadId" : null,
+  "providers" : [
+    {
+      "canRunChildTask" : true,
+      "canRunCrossProviderChildTask" : true,
+      "constraints" : [
+
+      ],
+      "displayName" : "Codex",
+      "driverKind" : "codex",
+      "models" : [
+        {
+          "id" : "gpt-6.2-sol",
+          "options" : [
+            {
+              "default" : "low",
+              "id" : "reasoningEffort",
+              "values" : [
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max",
+                "ultra"
+              ]
+            },
+            {
+              "default" : "default",
+              "id" : "serviceTier",
+              "values" : [
+                "default",
+                "priority"
+              ]
+            }
+          ]
+        },
+        {
+          "id" : "gpt-6.2-astra",
+          "options" : [
+            {
+              "default" : "low",
+              "id" : "reasoningEffort",
+              "values" : [
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max",
+                "ultra"
+              ]
+            },
+            {
+              "default" : "default",
+              "id" : "serviceTier",
+              "values" : [
+                "default",
+                "priority"
+              ]
+            }
+          ]
+        },
+        {
+          "id" : "gpt-6.1-terra",
+          "label" : "GPT-6.1 Terra",
+          "options" : [
+            {
+              "default" : "low",
+              "id" : "reasoningEffort",
+              "values" : [
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max",
+                "ultra"
+              ]
+            },
+            {
+              "default" : "default",
+              "id" : "serviceTier",
+              "values" : [
+                "default",
+                "priority"
+              ]
+            }
+          ]
+        },
+        {
+          "id" : "gpt-6.1-sol",
+          "options" : [
+            {
+              "default" : "low",
+              "id" : "reasoningEffort",
+              "values" : [
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max",
+                "ultra"
+              ]
+            },
+            {
+              "default" : "default",
+              "id" : "serviceTier",
+              "values" : [
+                "default",
+                "priority"
+              ]
+            }
+          ]
+        },
+        {
+          "id" : "gpt-6-astra",
+          "options" : [
+            {
+              "default" : "medium",
+              "id" : "reasoningEffort",
+              "values" : [
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max",
+                "ultra"
+              ]
+            },
+            {
+              "default" : "default",
+              "id" : "serviceTier",
+              "values" : [
+                "default",
+                "priority"
+              ]
+            }
+          ]
+        },
+        {
+          "id" : "gpt-6-luna",
+          "options" : [
+            {
+              "default" : "medium",
+              "id" : "reasoningEffort",
+              "values" : [
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max"
+              ]
+            },
+            {
+              "default" : "default",
+              "id" : "serviceTier",
+              "values" : [
+                "default",
+                "priority"
+              ]
+            }
+          ]
+        }
+      ],
+      "omittedModels" : 4,
+      "providerInstanceId" : "codex"
+    },
+    {
+      "canRunChildTask" : true,
+      "canRunCrossProviderChildTask" : true,
+      "constraints" : [
+
+      ],
+      "displayName" : "Claude",
+      "driverKind" : "claudeAgent",
+      "models" : [
+        {
+          "id" : "claude-opus-5-5",
+          "label" : "Claude Opus 5.5",
+          "options" : [
+            {
+              "default" : "medium",
+              "id" : "effort",
+              "values" : [
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max",
+                "ultrathink"
+              ]
+            },
+            {
+              "id" : "ultracode",
+              "values" : [
+                false,
+                true
+              ]
+            },
+            {
+              "id" : "fastMode",
+              "values" : [
+                false,
+                true
+              ]
+            }
+          ]
+        },
+        {
+          "id" : "claude-sonnet-5-5",
+          "label" : "Claude Sonnet 5.5",
+          "options" : [
+            {
+              "default" : "high",
+              "id" : "effort",
+              "values" : [
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max",
+                "ultrathink"
+              ]
+            },
+            {
+              "id" : "ultracode",
+              "values" : [
+                false,
+                true
+              ]
+            }
+          ]
+        },
+        {
+          "id" : "claude-fable-5-2",
+          "label" : "Claude Fable 5.2",
+          "options" : [
+            {
+              "default" : "medium",
+              "id" : "effort",
+              "values" : [
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max",
+                "ultrathink"
+              ]
+            },
+            {
+              "id" : "ultracode",
+              "values" : [
+                false,
+                true
+              ]
+            }
+          ]
+        },
+        {
+          "id" : "claude-haiku-5-5",
+          "label" : "Claude Haiku 5.5",
+          "options" : [
+            {
+              "default" : "medium",
+              "id" : "effort",
+              "values" : [
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max",
+                "ultrathink"
+              ]
+            },
+            {
+              "id" : "ultracode",
+              "values" : [
+                false,
+                true
+              ]
+            }
+          ]
+        }
+      ],
+      "omittedModels" : 10,
+      "providerInstanceId" : "claudeAgent"
+    },
+    {
+      "canRunChildTask" : false,
+      "canRunCrossProviderChildTask" : false,
+      "constraints" : [
+        "Provider instance is disabled."
+      ],
+      "displayName" : "Cursor",
+      "driverKind" : "cursor",
+      "models" : [
+
+      ],
+      "providerInstanceId" : "cursor"
+    },
+    {
+      "canRunChildTask" : false,
+      "canRunCrossProviderChildTask" : false,
+      "constraints" : [
+        "Provider instance is disabled."
+      ],
+      "displayName" : "Grok",
+      "driverKind" : "grok",
+      "models" : [
+        {
+          "id" : "grok-build",
+          "label" : "Grok Build"
+        }
+      ],
+      "providerInstanceId" : "grok",
+      "runtimeModes" : [
+        "approval-required",
+        "auto",
+        "full-access"
+      ]
+    },
+    {
+      "canRunChildTask" : false,
+      "canRunCrossProviderChildTask" : false,
+      "constraints" : [
+        "Provider instance is disabled."
+      ],
+      "displayName" : "OpenCode",
+      "driverKind" : "opencode",
+      "models" : [
+
+      ],
+      "providerInstanceId" : "opencode"
+    },
+    {
+      "canRunChildTask" : false,
+      "canRunCrossProviderChildTask" : false,
+      "constraints" : [
+        "Provider instance is disabled."
+      ],
+      "displayName" : "Antigravity",
+      "driverKind" : "antigravity",
+      "models" : [
+
+      ],
+      "providerInstanceId" : "antigravity",
+      "runtimeModes" : [
+        "approval-required",
+        "auto-accept-edits",
+        "full-access"
+      ]
+    },
+    {
+      "canRunChildTask" : false,
+      "canRunCrossProviderChildTask" : false,
+      "constraints" : [
+        "Provider instance is disabled."
+      ],
+      "displayName" : "fx",
+      "driverKind" : "fx",
+      "models" : [
+        {
+          "id" : "default",
+          "options" : [
+            {
+              "default" : "medium",
+              "id" : "effort",
+              "values" : [
+                "auto",
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max"
+              ]
+            }
+          ]
+        }
+      ],
+      "providerInstanceId" : "fx",
+      "runtimeModes" : [
+        "approval-required",
+        "auto"
+      ]
+    },
+    {
+      "canRunChildTask" : false,
+      "canRunCrossProviderChildTask" : false,
+      "constraints" : [
+        "Provider instance is disabled."
+      ],
+      "displayName" : "Kiro",
+      "driverKind" : "kiro",
+      "models" : [
+        {
+          "id" : "default",
+          "label" : "Kiro default"
+        }
+      ],
+      "providerInstanceId" : "kiro",
+      "runtimeModes" : [
+        "approval-required",
+        "full-access"
+      ]
+    },
+    {
+      "canRunChildTask" : false,
+      "canRunCrossProviderChildTask" : false,
+      "constraints" : [
+        "Provider instance is disabled."
+      ],
+      "displayName" : "Muse Code",
+      "driverKind" : "muse",
+      "models" : [
+
+      ],
+      "providerInstanceId" : "muse",
+      "runtimeModes" : [
+        "approval-required",
+        "full-access"
+      ]
+    },
+    {
+      "canRunChildTask" : false,
+      "canRunCrossProviderChildTask" : false,
+      "constraints" : [
+        "Provider instance is disabled."
+      ],
+      "displayName" : "Pi",
+      "driverKind" : "pi",
+      "models" : [
+        {
+          "id" : "default",
+          "label" : "Pi default"
+        }
+      ],
+      "providerInstanceId" : "pi",
+      "runtimeModes" : [
+        "approval-required",
+        "auto-accept-edits",
+        "full-access"
+      ]
+    }
+  ],
+  "runtimeMode" : "auto"
+}

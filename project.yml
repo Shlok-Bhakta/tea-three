@@ -1,0 +1,84 @@
+# Generate the Xcode project with `xcodegen` (brew install xcodegen).
+# Personal settings (team, bundle id, CarPlay) go in Config/Local.xcconfig.
+name: TeaThree
+options:
+  bundleIdPrefix: com.shlokbhakta
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+
+configFiles:
+  Debug: Config/App.xcconfig
+  Release: Config/App.xcconfig
+
+packages:
+  TeaThreeKit:
+    path: Packages/TeaThreeKit
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  TeaThree:
+    type: application
+    platform: iOS
+    sources:
+      - path: App/Sources
+      - path: App/Resources
+    dependencies:
+      - package: TeaThreeKit
+        product: TeaThreeKit
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Tea Three
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        ITSAppUsesNonExemptEncryption: false
+        NSMicrophoneUsageDescription: Tea Three listens when you talk to your T3 Code Copilot.
+        NSSpeechRecognitionUsageDescription: Tea Three turns what you say into a message for your T3 Code Copilot, on device.
+        NSCameraUsageDescription: Scan the pairing QR code from `t3 pair`.
+        NSLocalNetworkUsageDescription: Tea Three talks to the T3 Code server on your Mac.
+        # T3 Code on a LAN or tailnet IP is plain HTTP. Prefer an https *.ts.net
+        # address (`t3 pair --tailscale`) if you can.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+          NSAllowsLocalNetworking: true
+        # Keeps the mic and speech running in the car with the phone locked.
+        UIBackgroundModes: [audio]
+        CFBundleURLTypes:
+          - CFBundleURLName: com.shlokbhakta.teathree.pair
+            CFBundleURLSchemes: [teathree]
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+          UISceneConfigurations:
+            CPTemplateApplicationSceneSessionRoleApplication:
+              - UISceneConfigurationName: CarPlay
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).CarPlaySceneDelegate
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(TEA_THREE_BUNDLE_ID)
+        DEVELOPMENT_TEAM: $(TEA_THREE_TEAM)
+        CODE_SIGN_ENTITLEMENTS: $(TEA_THREE_ENTITLEMENTS)
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        INFOPLIST_KEY_CFBundleDisplayName: Tea Three
+        ENABLE_PREVIEWS: YES
+
+schemes:
+  TeaThree:
+    build:
+      targets:
+        TeaThree: all
+    test:
+      config: Debug
+    run:
+      config: Debug

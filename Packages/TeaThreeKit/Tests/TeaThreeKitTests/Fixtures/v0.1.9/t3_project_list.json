@@ -1,0 +1,28 @@
+{
+  "nextCursor" : null,
+  "projects" : [
+    {
+      "archivedAt" : null,
+      "autoPull" : false,
+      "createdAt" : "2026-11-19T00:54:19.961Z",
+      "defaultModelSelection" : null,
+      "defaultThreadEnvMode" : null,
+      "deletedAt" : null,
+      "faviconPath" : null,
+      "id" : "f5d40789-8ddf-4d0b-8748-70c4a1d8a009",
+      "pinnedAt" : null,
+      "projectIcon" : {
+        "color" : "gray",
+        "kind" : "lucide",
+        "name" : "message-square-dashed"
+      },
+      "repositoryIdentity" : null,
+      "scripts" : [
+
+      ],
+      "title" : "No project",
+      "updatedAt" : "2026-11-19T00:54:19.965Z",
+      "workspaceRoot" : "/home/t3/.t3/scratch"
+    }
+  ]
+}

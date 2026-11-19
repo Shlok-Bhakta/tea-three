@@ -1,0 +1,11 @@
+// Copy to Config/Local.xcconfig and fill in. That file is gitignored.
+
+// Your Apple Developer team id (Xcode > Settings > Accounts).
+TEA_THREE_TEAM = ABCDE12345
+
+// Must be unique to your team if you aren't Shlok.
+// TEA_THREE_BUNDLE_ID = com.yourname.teathree
+
+// After Apple grants the CarPlay voice-based conversation entitlement
+// (developer.apple.com/contact/carplay), switch to the CarPlay entitlements:
+// TEA_THREE_ENTITLEMENTS = App/TeaThree-CarPlay.entitlements

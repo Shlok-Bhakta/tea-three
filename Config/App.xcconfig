@@ -1,0 +1,6 @@
+// Defaults. Override any of these in Config/Local.xcconfig (gitignored).
+TEA_THREE_BUNDLE_ID = com.shlokbhakta.teathree
+TEA_THREE_TEAM =
+TEA_THREE_ENTITLEMENTS = App/TeaThree.entitlements
+
+#include? "Local.xcconfig"

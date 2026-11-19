@@ -1,0 +1,518 @@
+[
+  {
+    "description" : "List providers, models, options, and runtime modes for `delegate_task`. Short list. `search` finds others. Any catalog model works.",
+    "inputSchema" : {
+      "properties" : {
+        "environmentId" : {
+          "type" : "string"
+        },
+        "search" : {
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "orchestrator_capabilities"
+  },
+  {
+    "description" : "List projects. Pages can shift.",
+    "inputSchema" : {
+      "properties" : {
+        "cursor" : {
+          "minimum" : 0,
+          "type" : "integer"
+        },
+        "environmentId" : {
+          "type" : "string"
+        },
+        "limit" : {
+          "maximum" : 100,
+          "minimum" : 1,
+          "type" : "integer"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "t3_project_list"
+  },
+  {
+    "description" : "Read a thread's provider, model, and modes, or set its provider, model, and options with `modelSelection`. Omit `threadId` for this thread. Permission modes stay. Values from `orchestrator_capabilities`.",
+    "inputSchema" : {
+      "properties" : {
+        "environmentId" : {
+          "type" : "string"
+        },
+        "modelSelection" : {
+          "properties" : {
+            "instanceId" : {
+
+            },
+            "model" : {
+
+            },
+            "options" : {
+
+            },
+            "provider" : {
+
+            }
+          },
+          "required" : [
+            "model"
+          ],
+          "type" : "object"
+        },
+        "threadId" : {
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "t3_thread_configure"
+  },
+  {
+    "description" : "Interrupt a top-level thread's running turn. No `runId`: newest running turn. No effect when idle. For a delegate, use `task_cancel`.",
+    "inputSchema" : {
+      "properties" : {
+        "clientRequestId" : {
+          "type" : "string"
+        },
+        "environmentId" : {
+          "type" : "string"
+        },
+        "reason" : {
+          "maxLength" : 2000,
+          "type" : "string"
+        },
+        "runId" : {
+          "type" : "string"
+        },
+        "stop" : {
+          "type" : "boolean"
+        },
+        "threadId" : {
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "threadId"
+      ],
+      "type" : "object"
+    },
+    "name" : "t3_thread_interrupt"
+  },
+  {
+    "description" : "Create one new top-level thread, bound to its workspace before the agent starts. Task in `message`. Omit `projectId`, model and modes to inherit yours (outside a thread, pass `projectId` or `scratch`); modes cannot exceed yours. After an error or lost reply, retry with the same `clientRequestId`. Follow it with `t3_thread_read` or `t3_thread_wait`. Mention it with its `link`.",
+    "inputSchema" : {
+      "properties" : {
+        "attachments" : {
+          "items" : {
+            "properties" : {
+              "id" : {
+                "type" : "string"
+              },
+              "mimeType" : {
+                "type" : "string"
+              },
+              "name" : {
+                "type" : "string"
+              },
+              "sizeBytes" : {
+                "anyOf" : [
+                  {
+                    "maximum" : 10485760,
+                    "minimum" : 0,
+                    "type" : "integer"
+                  },
+                  {
+                    "maximum" : 52428800,
+                    "minimum" : 1,
+                    "type" : "integer"
+                  }
+                ]
+              },
+              "source" : {
+                "properties" : {
+                  "_tag" : {
+                    "enum" : [
+                      "pasted-text"
+                    ],
+                    "type" : "string"
+                  }
+                },
+                "required" : [
+                  "_tag"
+                ],
+                "type" : "object"
+              },
+              "type" : {
+                "enum" : [
+                  "image",
+                  "file"
+                ],
+                "type" : "string"
+              }
+            },
+            "required" : [
+              "type",
+              "id",
+              "name",
+              "mimeType",
+              "sizeBytes"
+            ],
+            "type" : "object"
+          },
+          "maxItems" : 8,
+          "type" : "array"
+        },
+        "clientRequestId" : {
+          "type" : "string"
+        },
+        "delegatedFrom" : {
+          "properties" : {
+            "environmentId" : {
+              "type" : "string"
+            },
+            "threadId" : {
+              "type" : "string"
+            },
+            "title" : {
+              "type" : "string"
+            }
+          },
+          "required" : [
+            "environmentId",
+            "threadId",
+            "title"
+          ],
+          "type" : "object"
+        },
+        "environmentId" : {
+          "type" : "string"
+        },
+        "interactionMode" : {
+          "enum" : [
+            "default",
+            "plan"
+          ],
+          "type" : "string"
+        },
+        "message" : {
+          "description" : "First prompt. Omit it and `attachments` for idle.",
+          "maxLength" : 120000,
+          "type" : "string"
+        },
+        "modelSelection" : {
+          "properties" : {
+            "instanceId" : {
+
+            },
+            "model" : {
+
+            },
+            "options" : {
+
+            },
+            "provider" : {
+
+            }
+          },
+          "required" : [
+            "model"
+          ],
+          "type" : "object"
+        },
+        "projectId" : {
+          "type" : "string"
+        },
+        "runtimeMode" : {
+          "enum" : [
+            "approval-required",
+            "auto-accept-edits",
+            "auto",
+            "full-access"
+          ],
+          "type" : "string"
+        },
+        "scratch" : {
+          "description" : "No project: a new Scratch folder. Not with `projectId` or `workspaceStrategy`.",
+          "type" : "boolean"
+        },
+        "title" : {
+          "type" : "string"
+        },
+        "workspaceStrategy" : {
+          "description" : "'worktree': new checkout from `baseRef`. Honor a requested base. Otherwise, independent work uses the default branch as `remote/branch` (e.g. `origin/main`) with `startFromOrigin: true`; with no remote, use the local default branch. Required unpublished commits and dependent or stacked work use their local base with `startFromOrigin: false`. 'existing_worktree': bind `worktreePath`, a project worktree. 'root': project checkout, the default, not your worktree. Uncommitted edits are not copied.",
+          "properties" : {
+            "baseRef" : {
+              "type" : "string"
+            },
+            "branch" : {
+              "type" : "string"
+            },
+            "startFromOrigin" : {
+              "type" : "boolean"
+            },
+            "type" : {
+              "enum" : [
+                "root",
+                "existing_worktree",
+                "worktree"
+              ],
+              "type" : "string"
+            },
+            "worktreePath" : {
+              "type" : "string"
+            }
+          },
+          "required" : [
+            "type"
+          ],
+          "type" : "object"
+        }
+      },
+      "required" : [
+        "title"
+      ],
+      "type" : "object"
+    },
+    "name" : "t3_thread_launch"
+  },
+  {
+    "description" : "List threads newest first, in one project or with `allProjects`. Page with `cursor`.",
+    "inputSchema" : {
+      "properties" : {
+        "allProjects" : {
+          "type" : "boolean"
+        },
+        "cursor" : {
+          "minimum" : 0,
+          "type" : "integer"
+        },
+        "environmentId" : {
+          "type" : "string"
+        },
+        "includeSubagents" : {
+          "type" : "boolean"
+        },
+        "limit" : {
+          "maximum" : 100,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "projectId" : {
+          "type" : "string"
+        },
+        "settled" : {
+          "type" : "boolean"
+        },
+        "snoozed" : {
+          "type" : "boolean"
+        },
+        "statuses" : {
+          "items" : {
+            "enum" : [
+              "idle",
+              "preparing",
+              "queued",
+              "starting",
+              "running",
+              "waiting",
+              "completed",
+              "interrupted",
+              "failed",
+              "cancelled",
+              "rolled_back"
+            ],
+            "type" : "string"
+          },
+          "maxItems" : 10,
+          "type" : "array"
+        },
+        "titleContains" : {
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "t3_thread_list"
+  },
+  {
+    "description" : "Pin, snooze, settle, archive, or mark a thread unread. Omit `threadId` for this thread. `snooze` needs `snoozedUntil`. Settling this thread applies at turn end. A failed turn or queued message leaves it active.",
+    "inputSchema" : {
+      "properties" : {
+        "action" : {
+          "enum" : [
+            "pin",
+            "unpin",
+            "snooze",
+            "unsnooze",
+            "settle",
+            "unsettle",
+            "archive",
+            "unarchive",
+            "mark_unread"
+          ],
+          "type" : "string"
+        },
+        "environmentId" : {
+          "type" : "string"
+        },
+        "snoozedUntil" : {
+          "type" : "string"
+        },
+        "threadId" : {
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "action"
+      ],
+      "type" : "object"
+    },
+    "name" : "t3_thread_organize"
+  },
+  {
+    "description" : "Read any thread by id. `messages` (default): user and assistant messages and plans. `activity`: all timeline items. Keep reads small: low `limit` and `maxCharsPerItem`. Page with `afterPosition=nextPosition`. Cut-off text: `itemId` with `textOffset=nextTextOffset`. Reading a child's final result marks it delivered. In your reply, name it as its `link` verbatim.",
+    "inputSchema" : {
+      "properties" : {
+        "afterPosition" : {
+          "minimum" : 0,
+          "type" : "integer"
+        },
+        "environmentId" : {
+          "type" : "string"
+        },
+        "itemId" : {
+          "type" : "string"
+        },
+        "limit" : {
+          "description" : "Max items, 1 to 100.",
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "maxCharsPerItem" : {
+          "description" : "Max chars per item, 1 to 50000.",
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "runLimit" : {
+          "description" : "Max recent runs, 1 to 50.",
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "textOffset" : {
+          "minimum" : 0,
+          "type" : "integer"
+        },
+        "threadId" : {
+          "type" : "string"
+        },
+        "view" : {
+          "enum" : [
+            "messages",
+            "activity"
+          ],
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "threadId"
+      ],
+      "type" : "object"
+    },
+    "name" : "t3_thread_read"
+  },
+  {
+    "description" : "Search active threads by title, branch, PR, project, then message text. Skips subagent threads. `projectId`: one project, else yours, else all outside a thread. Not exhaustive.",
+    "inputSchema" : {
+      "properties" : {
+        "environmentId" : {
+          "type" : "string"
+        },
+        "limit" : {
+          "maximum" : 50,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "projectId" : {
+          "type" : "string"
+        },
+        "query" : {
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "query"
+      ],
+      "type" : "object"
+    },
+    "name" : "t3_thread_search"
+  },
+  {
+    "description" : "Send a message to any thread. The target cannot run with broader modes than yours. `mode:'auto'` starts an idle thread, steers a running turn, or queues. `queue`: new turn. `steer`: mid-turn update. `restart`: interrupt and restart. A send to a finished child thread starts a fresh task and returns its `taskId`. In your reply, name it as its `link` verbatim.",
+    "inputSchema" : {
+      "properties" : {
+        "clientRequestId" : {
+          "type" : "string"
+        },
+        "environmentId" : {
+          "type" : "string"
+        },
+        "freshContext" : {
+          "description" : "Start a new provider session without the thread's earlier context, like /clear. Never steers.",
+          "type" : "boolean"
+        },
+        "message" : {
+          "type" : "string"
+        },
+        "mode" : {
+          "enum" : [
+            "auto",
+            "queue",
+            "steer",
+            "restart"
+          ],
+          "type" : "string"
+        },
+        "threadId" : {
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "threadId",
+        "message"
+      ],
+      "type" : "object"
+    },
+    "name" : "t3_thread_send"
+  },
+  {
+    "description" : "Wait for a thread's run to finish. No `runId`: latest. Idle: at once. On timeout, with `next` end your turn; without, call again.",
+    "inputSchema" : {
+      "properties" : {
+        "environmentId" : {
+          "type" : "string"
+        },
+        "runId" : {
+          "type" : "string"
+        },
+        "threadId" : {
+          "type" : "string"
+        },
+        "timeoutMs" : {
+          "type" : "number"
+        },
+        "untilDelegatedWorkSettled" : {
+          "description" : "Also wait for its delegated and background tasks and their completions to settle. `resultRun` then names the run with its final answer.",
+          "type" : "boolean"
+        }
+      },
+      "required" : [
+        "threadId"
+      ],
+      "type" : "object"
+    },
+    "name" : "t3_thread_wait"
+  }
+]

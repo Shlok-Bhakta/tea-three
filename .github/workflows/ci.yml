@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Nightly: catch upstream T3 Code changes before they reach the phone.
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  kit:
+    name: TeaThreeKit tests (recorded contract)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit + fixture contract tests
+        working-directory: Packages/TeaThreeKit
+        run: swift test
+
+  app:
+    name: iOS app builds
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: xcodegen generate
+      - name: Build for simulator
+        run: |
+          xcodebuild -project TeaThree.xcodeproj -scheme TeaThree \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO build
+
+  contract:
+    name: Live contract vs t3@${{ matrix.tag }}
+    runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        tag: [latest, nightly]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Boot t3@${{ matrix.tag }} and run LiveContractTests
+        run: scripts/contract-against-npm.sh ${{ matrix.tag }}
+      - name: Open an issue when upstream breaks the contract
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Contract broken against t3@${{ matrix.tag }}"
+          if ! gh issue list --state open --search "$title in:title" --json number --jq '.[0].number' | grep -q .; then
+            gh issue create --title "$title" --body "The nightly live contract run failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          Run \`scripts/contract-against-npm.sh ${{ matrix.tag }}\` locally, then update \`ToolContract\` / the client and record new fixtures with \`tea-three record\`."
+          fi
