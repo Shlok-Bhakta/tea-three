@@ -1,10 +1,13 @@
 import AVFoundation
 
-/// Text-to-speech in Tea Three's own voice (not Siri's).
+/// Text-to-speech in Tea Three's own voice (not Siri's). The voice and rate
+/// come from Settings; with nothing picked, the best installed English voice.
 final class Speaker: NSObject {
+    static let voiceKey = "voice.identifier"
+    static let rateKey = "voice.rate"
+
     private let synthesizer = AVSpeechSynthesizer()
     private var continuation: CheckedContinuation<Void, Never>?
-    private lazy var voice: AVSpeechSynthesisVoice? = Self.bestVoice()
 
     override init() {
         super.init()
@@ -13,9 +16,11 @@ final class Speaker: NSObject {
 
     func speak(_ text: String) async {
         stop()
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = voice
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 1.05
+        let utterance = AVSpeechUtterance(string: Self.speakable(text))
+        utterance.voice = Self.chosenVoice()
+        let rate = UserDefaults.standard.object(forKey: Self.rateKey) as? Double ?? 1.0
+        utterance.rate = min(AVSpeechUtteranceMaximumSpeechRate, AVSpeechUtteranceDefaultSpeechRate * Float(rate))
+        utterance.prefersAssistiveTechnologySettings = false
         utterance.postUtteranceDelay = 0.1
         await withCheckedContinuation { continuation in
             self.continuation = continuation
@@ -33,13 +38,39 @@ final class Speaker: NSObject {
         continuation = nil
     }
 
-    /// The nicest installed voice for the user's language: premium, then enhanced.
-    private static func bestVoice() -> AVSpeechSynthesisVoice? {
+    static func chosenVoice() -> AVSpeechSynthesisVoice? {
+        if let id = UserDefaults.standard.string(forKey: voiceKey), let voice = AVSpeechSynthesisVoice(identifier: id) {
+            return voice
+        }
+        return availableVoices().first
+    }
+
+    /// English voices, best first: premium, then enhanced, then the rest; the
+    /// phone's own accent before other accents.
+    static func availableVoices() -> [AVSpeechSynthesisVoice] {
         let language = AVSpeechSynthesisVoice.currentLanguageCode()
-        let voices = AVSpeechSynthesisVoice.speechVoices().filter { $0.language == language }
-        return voices.first { $0.quality == .premium }
-            ?? voices.first { $0.quality == .enhanced }
-            ?? AVSpeechSynthesisVoice(language: language)
+        let family = String(language.prefix(2))
+        func rank(_ voice: AVSpeechSynthesisVoice) -> (Int, Int, String) {
+            let quality = switch voice.quality {
+            case .premium: 0
+            case .enhanced: 1
+            default: voice.voiceTraits.contains(.isPersonalVoice) ? 0 : 2
+            }
+            return (quality, voice.language == language ? 0 : 1, voice.name)
+        }
+        return AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language.hasPrefix(family) && !$0.voiceTraits.contains(.isNoveltyVoice) }
+            .sorted { rank($0) < rank($1) }
+    }
+
+    /// Strips what reads badly aloud: markdown, code fences, raw links.
+    static func speakable(_ text: String) -> String {
+        var text = text
+        text = text.replacingOccurrences(of: "```[\\s\\S]*?```", with: " (code omitted) ", options: .regularExpression)
+        text = text.replacingOccurrences(of: "\\[([^\\]]+)\\]\\([^)]+\\)", with: "$1", options: .regularExpression)
+        text = text.replacingOccurrences(of: "https?://\\S+", with: "a link", options: .regularExpression)
+        text = text.replacingOccurrences(of: "[*_`#>|]+", with: "", options: .regularExpression)
+        return text.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespaces)
     }
 }
 
