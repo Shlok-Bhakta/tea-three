@@ -1,4 +1,5 @@
 import Foundation
+import Network
 import Observation
 import UIKit
 import TeaThreeKit
@@ -36,8 +37,18 @@ final class AppModel {
     /// Photos that go out with the next message, typed or spoken.
     private(set) var pendingPhotos: [PendingPhoto] = []
     var lastError: String?
+    /// The status light. `nil` until the first check answers.
+    private(set) var connection: ConnectionStatus?
+    private(set) var isCheckingConnection = false
+    private(set) var connectionCheckedAt: Date?
 
     var isPaired: Bool { credential != nil }
+    /// "crabcake", from the server's own label.
+    var serverName: String { credential?.environmentLabel ?? credential?.serverURL.host ?? "T3 Code" }
+    var serverAddress: String { credential?.serverURL.absoluteString ?? "" }
+
+    @ObservationIgnored private var monitorTask: Task<Void, Never>?
+    @ObservationIgnored private var pathMonitor: NWPathMonitor?
 
     private init() {
         let service = Shared.service
@@ -48,6 +59,12 @@ final class AppModel {
         self.contractReport = service.store.lastContractReport
         self.outboxCount = service.store.outbox.count
         voice.takeAttachments = { [weak self] in self?.takePendingAttachments() ?? [] }
+        voice.isOffline = { [weak self] in self?.connection.map { !$0.isConnected } ?? false }
+        voice.onDeliveryProblem = { [weak self] in
+            guard let self else { return }
+            outboxCount = service.store.outbox.count
+            Task { await self.checkConnection() }
+        }
     }
 
     // MARK: Pairing
@@ -63,6 +80,54 @@ final class AppModel {
         credential = nil
         capabilities = nil
         projects = []
+        connection = .signedOut("Not paired")
+    }
+
+    // MARK: Connection
+
+    /// Checks the server while the app is open: every 30 s when connected,
+    /// every 5 s when not, and right away whenever the network changes (VPN
+    /// on or off, Wi-Fi to cellular).
+    func startMonitoring() {
+        guard monitorTask == nil else { return }
+        let paths = NWPathMonitor()
+        paths.pathUpdateHandler = { _ in
+            Task { @MainActor in await AppModel.shared.checkConnection() }
+        }
+        paths.start(queue: DispatchQueue(label: "tea-three.network"))
+        pathMonitor = paths
+        monitorTask = Task {
+            while !Task.isCancelled {
+                await checkConnection()
+                let connected = connection?.isConnected ?? false
+                try? await Task.sleep(for: .seconds(connected ? 30 : 5))
+            }
+        }
+    }
+
+    func stopMonitoring() {
+        monitorTask?.cancel()
+        monitorTask = nil
+        pathMonitor?.cancel()
+        pathMonitor = nil
+    }
+
+    func checkConnection() async {
+        guard isPaired else {
+            connection = .signedOut("Not paired")
+            return
+        }
+        guard !isCheckingConnection else { return }
+        isCheckingConnection = true
+        let wasConnected = connection?.isConnected ?? false
+        let status = await service.checkConnection()
+        isCheckingConnection = false
+        connection = status
+        connectionCheckedAt = Date()
+        // Back online: load what the first launch couldn't, and send what waited.
+        if status.isConnected, !wasConnected {
+            if capabilities == nil { await refresh() } else { await flushOutbox() }
+        }
     }
 
     // MARK: Server state
@@ -79,8 +144,15 @@ final class AppModel {
             contractReport = service.store.lastContractReport
             lastError = nil
         } catch let error as T3Error {
-            lastError = error.errorDescription
+            if case .transport = error {
+                // The status light says this better than an error line.
+                connection = .unreachable(error.errorDescription ?? "Couldn't reach the server")
+            } else {
+                lastError = error.errorDescription
+            }
             if case .unauthorized = error { credential = nil }
+        } catch let error as URLError {
+            connection = .unreachable(TeaThreeService.describe(error))
         } catch {
             lastError = error.localizedDescription
         }

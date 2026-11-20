@@ -1,14 +1,16 @@
 import SwiftUI
 import TeaThreeKit
 
-/// One screen: the latest exchange, a voice orb, and a T3-style glass composer.
-/// Tap the orb (or press the Action button) and just talk.
+/// One screen: the latest exchange and a T3-style glass composer. The
+/// waveform button in the composer starts hands-free talk; the title shows
+/// whether the server can be reached.
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.theme) private var theme
     @State private var showSettings = false
     @State private var showModels = false
     @State private var showVoices = false
+    @State private var showConnection = false
     @State private var typed = ""
     @FocusState private var typing: Bool
 
@@ -22,17 +24,27 @@ struct HomeView: View {
                 VStack(spacing: 0) {
                     exchange
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    VoiceOrb(voice: voice, enabled: hasModel)
-                        .padding(.bottom, 18)
+                        .contentShape(Rectangle())
+                        .onTapGesture { typing = false }
                     notices
                     composer
                 }
             }
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    HStack(spacing: 8) {
-                        Image("Mark").resizable().scaledToFit().frame(height: 18).foregroundStyle(theme.primaryText)
-                        Text("Tea Three").font(.headline).foregroundStyle(theme.foreground)
+                    Button { showConnection = true } label: {
+                        VStack(spacing: 1) {
+                            HStack(spacing: 6) {
+                                Image("Mark").resizable().scaledToFit().frame(height: 15).foregroundStyle(theme.primaryText)
+                                Text("Tea Three").font(.headline).foregroundStyle(theme.foreground)
+                            }
+                            ConnectionBadge()
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Connection to \(model.serverName)")
+                    .popover(isPresented: $showConnection) {
+                        ConnectionDetails().themed().presentationCompactAdaptation(.popover)
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -41,12 +53,13 @@ struct HomeView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             #if DEBUG
-            // `SIMCTL_CHILD_TEA_THREE_OPEN=models|settings` for screenshots.
+            // `SIMCTL_CHILD_TEA_THREE_OPEN=models|settings|voice|connection` for screenshots.
             .task {
                 switch ProcessInfo.processInfo.environment["TEA_THREE_OPEN"] {
                 case "models": showModels = true
                 case "settings": showSettings = true
                 case "voice": showVoices = true
+                case "connection": showConnection = true
                 default: break
                 }
                 if let text = ProcessInfo.processInfo.environment["TEA_THREE_SAY"] {
@@ -70,15 +83,18 @@ struct HomeView: View {
     /// Only the latest exchange. The full history lives in the thread in T3 Code.
     @ViewBuilder
     private var exchange: some View {
-        let said = voice.partial.isEmpty ? voice.turns.last { $0.role == .you }?.text : voice.partial
-        let reply = voice.turns.last.flatMap { $0.role == .you ? nil : $0.text }
+        let mine = voice.turns.last { $0.role == .you }
+        let said = voice.partial.isEmpty ? mine?.text : voice.partial
+        let reply = voice.turns.last.flatMap { $0.role == .you ? nil : $0 }
         if said == nil, reply == nil {
             VStack(spacing: 14) {
                 Image("Mark").resizable().scaledToFit().frame(height: 56).foregroundStyle(theme.primaryText)
                 Text(hasModel ? "What should we do?" : "Pick a model to start")
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(theme.foreground)
-                Text("Everything goes to your pinned “\(model.settings.threadTitle)” thread in T3 Code, which sends it to the right place.")
+                Text(hasModel
+                     ? "Type below, or tap \(Image(systemName: "waveform")) to talk hands-free. Everything goes to your “\(model.settings.threadTitle)” thread in T3 Code."
+                     : "Tap the model button below to choose which model your Copilot runs on.")
                     .font(.subheadline)
                     .foregroundStyle(theme.foregroundSecondary)
                     .multilineTextAlignment(.center)
@@ -88,20 +104,37 @@ struct HomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if let said {
-                        Text(said)
-                            .foregroundStyle(theme.userBubbleForeground)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(theme.userBubble, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                            .opacity(voice.partial.isEmpty ? 1 : 0.6)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-                            .padding(.leading, 48)
+                        VStack(alignment: .trailing, spacing: 5) {
+                            Text(said)
+                                .foregroundStyle(theme.userBubbleForeground)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                                .background(theme.userBubble, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                                .opacity(voice.partial.isEmpty ? 1 : 0.6)
+                            if voice.partial.isEmpty, let delivery = mine?.delivery {
+                                DeliveryLabel(delivery: delivery, server: model.serverName)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.leading, 48)
                     }
-                    if let reply {
-                        Text(reply)
-                            .foregroundStyle(theme.foreground)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.trailing, 24)
+                    if voice.phase == .thinking, voice.partial.isEmpty, mine?.delivery != .queued, mine?.delivery != .failed {
+                        Label("Working on it…", systemImage: "ellipsis")
+                            .symbolEffect(.variableColor.iterative)
+                            .font(.subheadline)
+                            .foregroundStyle(theme.foregroundSecondary)
+                    } else if let reply {
+                        if reply.role == .status {
+                            Label(reply.text, systemImage: "info.circle")
+                                .font(.subheadline)
+                                .foregroundStyle(theme.foregroundSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        } else {
+                            Text(reply.text)
+                                .foregroundStyle(theme.foreground)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.trailing, 24)
+                        }
                     }
                 }
                 .padding(.horizontal, 20)
@@ -113,19 +146,35 @@ struct HomeView: View {
 
     @ViewBuilder
     private var notices: some View {
-        if let error = model.lastError {
-            Label(error, systemImage: "exclamationmark.triangle.fill")
-                .font(.footnote)
-                .foregroundStyle(theme.primaryText)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 8)
+        VStack(spacing: 8) {
+            if case .unreachable = model.connection {
+                Button { showConnection = true } label: {
+                    Label("Can't reach \(model.serverName). Messages will wait and send once you're connected.", systemImage: "wifi.exclamationmark")
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(theme.foreground)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .glassEffect(.regular.tint(Color.orange.opacity(0.25)), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 12)
+            }
+            if let error = model.lastError {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(theme.primaryText)
+                    .padding(.horizontal, 20)
+            }
+            if model.outboxCount > 0 {
+                Label("\(model.outboxCount) waiting to send", systemImage: "tray.and.arrow.up")
+                    .font(.footnote)
+                    .foregroundStyle(theme.foregroundSecondary)
+            }
         }
-        if model.outboxCount > 0 {
-            Label("\(model.outboxCount) waiting to send", systemImage: "tray.and.arrow.up")
-                .font(.footnote)
-                .foregroundStyle(theme.foregroundSecondary)
-                .padding(.bottom, 8)
-        }
+        .padding(.bottom, 8)
+        .animation(.default, value: model.connection)
     }
 
     // MARK: Composer
@@ -135,12 +184,16 @@ struct HomeView: View {
     private var composer: some View {
         VStack(alignment: .leading, spacing: 10) {
             PendingPhotosStrip()
-            TextField("Message your Copilot", text: $typed, axis: .vertical)
-                .lineLimit(1...5)
-                .focused($typing)
-                .foregroundStyle(theme.foreground)
-                .padding(.horizontal, 4)
-                .onSubmit(sendTyped)
+            if voice.isRunning {
+                LiveLine(voice: voice)
+            } else {
+                TextField("Message your Copilot", text: $typed, axis: .vertical)
+                    .lineLimit(1...5)
+                    .focused($typing)
+                    .foregroundStyle(theme.foreground)
+                    .padding(.horizontal, 4)
+                    .onSubmit(sendTyped)
+            }
             HStack(spacing: 8) {
                 PhotoButton()
                     .disabled(!hasModel)
@@ -155,20 +208,26 @@ struct HomeView: View {
         .padding(.bottom, 6)
     }
 
+    /// Arrow when there's something typed; otherwise starts or stops hands-free talk.
     private var sendButton: some View {
         let icon = canSend ? "arrow.up" : (voice.isRunning ? "stop.fill" : "waveform")
         return Button {
-            if canSend { sendTyped() } else { voice.toggle() }
+            if canSend { sendTyped() } else { typing = false; voice.toggle() }
         } label: {
             Image(systemName: icon)
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(theme.primaryForeground)
+                .contentTransition(.symbolEffect(.replace))
                 .frame(width: 36, height: 36)
                 .background(theme.primary, in: Circle())
+                .background {
+                    if voice.phase == .listening { PulseRing(color: theme.primary) }
+                }
         }
         .disabled(!hasModel)
         .opacity(hasModel ? 1 : 0.4)
-        .accessibilityLabel(canSend ? "Send" : (voice.isRunning ? "Stop listening" : "Start talking"))
+        .sensoryFeedback(.impact, trigger: voice.isRunning)
+        .accessibilityLabel(canSend ? "Send" : (voice.isRunning ? "Stop listening" : "Talk hands-free"))
     }
 
     private var modelPill: some View {
@@ -182,7 +241,7 @@ struct HomeView: View {
                         .foregroundStyle(theme.foreground)
                 } else {
                     Image(systemName: "cpu").foregroundStyle(theme.primaryText)
-                    Text(model.capabilities == nil ? "Loading models…" : "Choose model")
+                    Text(model.capabilities != nil ? "Choose model" : model.connection?.isConnected == false ? "Models load once connected" : "Loading models…")
                         .foregroundStyle(theme.primaryText)
                 }
                 Image(systemName: "chevron.up.chevron.down")
@@ -208,54 +267,29 @@ struct HomeView: View {
     }
 }
 
-/// The hands-free button: a tinted glass orb that pulses while listening.
-private struct VoiceOrb: View {
+/// Takes the text field's place while talking hands-free: what's being heard,
+/// or what the Copilot is doing.
+private struct LiveLine: View {
     @Environment(\.theme) private var theme
     let voice: VoiceSession
-    let enabled: Bool
-    @State private var pulse = false
 
     var body: some View {
-        VStack(spacing: 10) {
-            Button { voice.toggle() } label: {
-                ZStack {
-                    if voice.phase == .listening {
-                        Circle()
-                            .stroke(theme.primary.opacity(0.5), lineWidth: 2)
-                            .frame(width: 104, height: 104)
-                            .scaleEffect(pulse ? 1.35 : 1)
-                            .opacity(pulse ? 0 : 1)
-                            .animation(.easeOut(duration: 1.4).repeatForever(autoreverses: false), value: pulse)
-                            .onAppear { pulse = true }
-                            .onDisappear { pulse = false }
-                    }
-                    Image(systemName: icon)
-                        .font(.system(size: 34, weight: .semibold))
-                        .foregroundStyle(voice.isRunning ? theme.primaryForeground : theme.primaryText)
-                        .symbolEffect(.variableColor.iterative, isActive: voice.phase == .listening || voice.phase == .thinking)
-                        .frame(width: 92, height: 92)
-                        .glassEffect(
-                            .regular.tint(voice.isRunning ? theme.primary : theme.primary.opacity(0.18)).interactive(),
-                            in: Circle()
-                        )
-                }
-            }
-            .buttonStyle(.plain)
-            .disabled(!enabled)
-            .opacity(enabled ? 1 : 0.5)
-            .accessibilityLabel(voice.isRunning ? "Stop listening" : "Start talking")
-            .sensoryFeedback(.impact, trigger: voice.isRunning)
-
-            Text(status)
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(theme.foregroundSecondary)
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: icon)
+                .foregroundStyle(theme.primaryText)
+                .symbolEffect(.variableColor.iterative, isActive: voice.phase == .listening || voice.phase == .thinking)
+            Text(voice.partial.isEmpty ? status : voice.partial)
+                .foregroundStyle(voice.partial.isEmpty ? theme.foregroundSecondary : theme.foreground)
+                .lineLimit(1...5)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(.horizontal, 4)
+        .animation(.default, value: voice.phase)
     }
 
     private var icon: String {
         switch voice.phase {
-        case .idle: "mic.fill"
-        case .listening: "waveform"
+        case .idle, .listening: "waveform"
         case .thinking: "ellipsis"
         case .speaking: "speaker.wave.2.fill"
         }
@@ -263,10 +297,55 @@ private struct VoiceOrb: View {
 
     private var status: String {
         switch voice.phase {
-        case .idle: enabled ? "Tap to talk" : "Choose a model first"
-        case .listening: "Listening…"
+        case .idle, .listening: "Listening… just talk"
         case .thinking: "Working on it…"
-        case .speaking: "Speaking"
+        case .speaking: "Speaking…"
         }
+    }
+}
+
+/// A ring that keeps expanding out of the talk button while it listens.
+private struct PulseRing: View {
+    let color: Color
+    @State private var expanded = false
+
+    var body: some View {
+        Circle()
+            .stroke(color.opacity(0.6), lineWidth: 2)
+            .scaleEffect(expanded ? 1.6 : 1)
+            .opacity(expanded ? 0 : 1)
+            .onAppear {
+                withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) { expanded = true }
+            }
+    }
+}
+
+/// "Sending…", "Delivered to crabcake", "Waiting for connection", or "Not sent".
+private struct DeliveryLabel: View {
+    @Environment(\.theme) private var theme
+    let delivery: VoiceSession.Turn.Delivery
+    let server: String
+
+    var body: some View {
+        Group {
+            switch delivery {
+            case .sending:
+                HStack(spacing: 5) {
+                    ProgressView().controlSize(.mini)
+                    Text("Sending…")
+                }
+            case .delivered:
+                Label("Delivered to \(server)", systemImage: "checkmark")
+            case .queued:
+                Label("Waiting for connection", systemImage: "clock")
+            case .failed:
+                Label("Not sent", systemImage: "exclamationmark.circle")
+                    .foregroundStyle(.orange)
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(theme.foregroundSecondary)
+        .padding(.trailing, 6)
+        .animation(.default, value: delivery)
     }
 }

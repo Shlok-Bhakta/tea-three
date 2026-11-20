@@ -16,9 +16,18 @@ final class VoiceSession {
 
     struct Turn: Identifiable, Equatable {
         enum Role { case you, copilot, status }
+        /// Where one of your messages is, shown under it.
+        enum Delivery: Equatable {
+            case sending
+            case delivered
+            /// Saved; sends when the server is back.
+            case queued
+            case failed
+        }
         let id = UUID()
         let role: Role
         let text: String
+        var delivery: Delivery?
     }
 
     private(set) var phase: Phase = .idle {
@@ -39,7 +48,11 @@ final class VoiceSession {
     static let stopPhrases = ["stop listening", "goodbye", "good bye", "that's all", "that is all", "we're done", "never mind"]
 
     /// Supplies (and clears) photos to send with the next message.
-    var takeAttachments: () -> [OutgoingAttachment] = { [] }
+    @ObservationIgnored var takeAttachments: () -> [OutgoingAttachment] = { [] }
+    /// The status light's last word: lets a send fail fast instead of hanging.
+    @ObservationIgnored var isOffline: () -> Bool = { false }
+    /// Called when a message couldn't reach the server, so the light rechecks.
+    @ObservationIgnored var onDeliveryProblem: () -> Void = {}
 
     init(service: TeaThreeService) {
         self.service = service
@@ -71,8 +84,9 @@ final class VoiceSession {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let photos = takeAttachments()
         guard !trimmed.isEmpty || !photos.isEmpty else { return }
-        turns.append(Turn(role: .you, text: Self.label(trimmed, photos: photos.count)))
-        await respond(to: trimmed, source: .typed, speak: false, attachments: photos)
+        let turn = Turn(role: .you, text: Self.label(trimmed, photos: photos.count), delivery: .sending)
+        turns.append(turn)
+        await respond(to: trimmed, turn: turn.id, source: .typed, speak: false, attachments: photos)
     }
 
     private static func label(_ text: String, photos: Int) -> String {
@@ -129,19 +143,27 @@ final class VoiceSession {
                 return
             }
             let photos = takeAttachments()
-            turns.append(Turn(role: .you, text: Self.label(heard, photos: photos.count)))
-            await respond(to: heard, source: .voice, speak: settings.speakReplies, attachments: photos)
+            let turn = Turn(role: .you, text: Self.label(heard, photos: photos.count), delivery: .sending)
+            turns.append(turn)
+            await respond(to: heard, turn: turn.id, source: .voice, speak: settings.speakReplies, attachments: photos)
         }
     }
 
-    private func respond(to text: String, source: CopilotPrompts.Source, speak: Bool, attachments: [OutgoingAttachment] = []) async {
+    private func respond(to text: String, turn: UUID, source: CopilotPrompts.Source, speak: Bool, attachments: [OutgoingAttachment] = []) async {
         phase = .thinking
+        // Known offline and still not answering: save it rather than wait out a timeout.
+        if isOffline(), await !service.checkConnection(timeout: 3).isConnected {
+            await undelivered(text, turn: turn, attachments: attachments, speak: speak)
+            return
+        }
         let reply: String
         do {
             let copilot = try service.copilot()
             let blocked = Flag()
             let answer = try await copilot.ask(text, source: source, attachments: attachments) { event in
                 switch event {
+                case .sent:
+                    await self.mark(turn, .delivered)
                 case .working(let elapsed) where elapsed > 18 && elapsed < 40 && speak:
                     await self.say("Still working on it.", resume: .thinking)
                 case .needsAttention:
@@ -158,13 +180,49 @@ final class VoiceSession {
         } catch is CancellationError {
             return
         } catch let error as T3Error {
+            if case .transport = error, delivery(of: turn) == .sending {
+                await undelivered(text, turn: turn, attachments: attachments, speak: speak)
+                return
+            }
+            if delivery(of: turn) == .sending { mark(turn, .failed) }
             reply = error.spokenDescription
             if case .unauthorized = error { stop() }
+        } catch is URLError where delivery(of: turn) == .sending {
+            await undelivered(text, turn: turn, attachments: attachments, speak: speak)
+            return
         } catch {
+            if delivery(of: turn) == .sending { mark(turn, .failed) }
             reply = "Something went wrong: \(error.localizedDescription)"
         }
         turns.append(Turn(role: .copilot, text: reply))
         if speak { await say(reply) }
+    }
+
+    /// The server can't be reached. Words wait in the outbox and go out when it's
+    /// back; photos can't, so those are reported as not sent.
+    private func undelivered(_ text: String, turn: UUID, attachments: [OutgoingAttachment], speak: Bool) async {
+        let reply: String
+        if attachments.isEmpty, !text.isEmpty {
+            // Sent later, when nobody's waiting on the reply: same as a Siri drop.
+            service.store.enqueue(text, source: .siri)
+            mark(turn, .queued)
+            reply = "Can't reach T3 Code right now. I saved that and will send it when you're connected."
+        } else {
+            mark(turn, .failed)
+            reply = "Can't reach T3 Code right now, so that wasn't sent. Try again once you're connected."
+        }
+        onDeliveryProblem()
+        turns.append(Turn(role: .status, text: reply))
+        if speak { await say(reply) }
+    }
+
+    private func mark(_ turn: UUID, _ delivery: Turn.Delivery) {
+        guard let index = turns.firstIndex(where: { $0.id == turn }) else { return }
+        turns[index].delivery = delivery
+    }
+
+    private func delivery(of turn: UUID) -> Turn.Delivery? {
+        turns.first { $0.id == turn }?.delivery
     }
 
     private func say(_ text: String, resume: Phase? = nil) async {

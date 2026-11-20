@@ -165,3 +165,45 @@ struct BundledCredentialTests {
         #expect(service.credentials.load()?.accessToken == "test-token")
     }
 }
+
+@Suite("Connection status")
+struct ConnectionTests {
+    /// Answers every request with one canned outcome.
+    struct Canned: HTTPTransport {
+        let outcome: @Sendable (URLRequest) throws -> (Int, String)
+        func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+            let (status, body) = try outcome(request)
+            return (Data(body.utf8), HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!)
+        }
+    }
+
+    @Test("a T3 environment descriptor means connected, with a short timeout")
+    func connected() async {
+        let transport = Canned { request in
+            #expect(request.url?.path == "/.well-known/t3/environment")
+            #expect(request.timeoutInterval == 5)
+            #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
+            return (200, #"{"environmentId":"env-1","label":"crabcake","serverVersion":"0.1.9"}"#)
+        }
+        let service = TeaThreeService(credentials: MemoryCredentialStore.paired, store: .ephemeral(), transport: transport)
+        #expect(await service.checkConnection().isConnected)
+    }
+
+    @Test("network errors and non-T3 answers mean unreachable")
+    func unreachable() async {
+        let offline = TeaThreeService(credentials: MemoryCredentialStore.paired, store: .ephemeral(),
+                                      transport: Canned { _ in throw URLError(.timedOut) })
+        #expect(await offline.checkConnection() == .unreachable("No answer (timed out)"))
+
+        let captive = TeaThreeService(credentials: MemoryCredentialStore.paired, store: .ephemeral(),
+                                      transport: Canned { _ in (200, "<html>Sign in to Wi-Fi</html>") })
+        #expect(await captive.checkConnection() == .unreachable("Answered HTTP 200"))
+    }
+
+    @Test("no login means signed out, without touching the network")
+    func signedOut() async {
+        let service = TeaThreeService(credentials: MemoryCredentialStore(), store: .ephemeral(),
+                                      transport: Canned { _ in Issue.record("shouldn't call"); return (500, "") })
+        #expect(await service.checkConnection() == .signedOut("Not paired"))
+    }
+}

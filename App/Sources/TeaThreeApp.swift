@@ -24,8 +24,13 @@ struct TeaThreeApp: App {
                     #endif
                     await model.refresh()
                 }
-                .onChange(of: scenePhase) { _, phase in
-                    if phase == .active { Task { await model.flushOutbox() } }
+                .onChange(of: scenePhase, initial: true) { _, phase in
+                    if phase == .active {
+                        model.startMonitoring()
+                        Task { await model.flushOutbox() }
+                    } else if phase == .background {
+                        model.stopMonitoring()
+                    }
                 }
         }
     }
