@@ -70,13 +70,13 @@ struct SettingsView: View {
                                 get: { model.settings.turnPause ?? TurnDetector.defaultPause },
                                 set: { model.settings.turnPause = $0 }
                             ),
-                            in: 1.0...5.0, step: 0.25
+                            in: 1.0...8.0, step: 0.5
                         )
                     }
                 } header: {
                     Text("Voice")
                 } footer: {
-                    Text("After a finished sentence. If you trail off on “um”, “and”, “but”, or a comma, it waits about 2.5 s longer, and “wait” or “hold on” holds it longer still. A soft tick plays a second before sending; keep talking to continue. Say “send it” to send right away.")
+                    Text("After a finished sentence. If you trail off on “um”, “and”, “but”, or a comma, it waits about 3 s longer, and “wait” or “hold on” holds it longer still. A soft tick plays a second before sending; keep talking to continue. Say “send it” to send right away.")
                 }
 
                 Section("Server") {

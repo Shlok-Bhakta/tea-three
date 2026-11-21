@@ -22,12 +22,12 @@ public struct TurnDetector: Sendable, Equatable {
     /// Silence after a finished sentence before sending. The user's setting.
     public var pause: TimeInterval
     /// Extra silence allowed after an unfinished thought.
-    public var hesitationExtra: TimeInterval = 2.5
+    public var hesitationExtra: TimeInterval = 3
     /// Extra silence allowed after "wait" / "hold on".
     public var holdExtra: TimeInterval = 6
     /// How long before sending the warning cue plays; speaking during it keeps the turn.
     public var warningLead: TimeInterval = 1.0
-    public static let defaultPause: TimeInterval = 2.0
+    public static let defaultPause: TimeInterval = 3.0
 
     public init(pause: TimeInterval = TurnDetector.defaultPause) {
         self.pause = pause
@@ -56,7 +56,7 @@ public struct TurnDetector: Sendable, Equatable {
         switch ending(of: transcript) {
         case .sendNow: 0.6
         case .finished: pause
-        case .uncertain: pause + 0.8
+        case .uncertain: pause + 1.5
         case .unfinished: pause + hesitationExtra
         case .holding: pause + holdExtra
         }

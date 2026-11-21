@@ -80,13 +80,12 @@ struct HomeView: View {
 
     // MARK: Latest exchange
 
-    /// Only the latest exchange. The full history lives in the thread in T3 Code.
+    /// Only the latest exchange (your request, any steers, the reply). The full
+    /// history lives in the thread in T3 Code.
     @ViewBuilder
     private var exchange: some View {
-        let mine = voice.turns.last { $0.role == .you }
-        let said = voice.partial.isEmpty ? mine?.text : voice.partial
-        let reply = voice.turns.last.flatMap { $0.role == .you ? nil : $0 }
-        if said == nil, reply == nil {
+        let recent = Array(voice.turns.suffix(6))
+        if recent.isEmpty, voice.partial.isEmpty {
             VStack(spacing: 14) {
                 Image("Mark").resizable().scaledToFit().frame(height: 56).foregroundStyle(theme.primaryText)
                 Text(hasModel ? "What should we do?" : "Pick a model to start")
@@ -103,42 +102,29 @@ struct HomeView: View {
         } else {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    if let said {
-                        VStack(alignment: .trailing, spacing: 5) {
-                            Text(said)
-                                .foregroundStyle(theme.userBubbleForeground)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 10)
-                                .background(theme.userBubble, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                                .opacity(voice.partial.isEmpty ? 1 : 0.6)
-                            if voice.partial.isEmpty, let delivery = mine?.delivery {
-                                DeliveryLabel(delivery: delivery, server: model.serverName)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .padding(.leading, 48)
+                    ForEach(recent) { turn in
+                        TurnView(turn: turn, server: model.serverName)
                     }
-                    if voice.phase == .thinking, voice.partial.isEmpty, mine?.delivery != .queued, mine?.delivery != .failed {
-                        Label("Working on it…", systemImage: "ellipsis")
-                            .symbolEffect(.variableColor.iterative)
-                            .font(.subheadline)
-                            .foregroundStyle(theme.foregroundSecondary)
-                    } else if let reply {
-                        if reply.role == .status {
-                            Label(reply.text, systemImage: "info.circle")
-                                .font(.subheadline)
-                                .foregroundStyle(theme.foregroundSecondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        } else {
-                            Text(reply.text)
-                                .foregroundStyle(theme.foreground)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.trailing, 24)
+                    if !voice.partial.isEmpty {
+                        Bubble(text: voice.partial).opacity(0.6)
+                    }
+                    if voice.isWorking {
+                        HStack(spacing: 10) {
+                            Label("Working on it…", systemImage: "ellipsis")
+                                .symbolEffect(.variableColor.iterative)
+                            Spacer(minLength: 0)
+                            Button("Stop", systemImage: "stop.fill") { Task { await voice.interrupt() } }
+                                .font(.subheadline.weight(.semibold))
+                                .buttonStyle(.glass)
+                                .tint(theme.primaryText)
                         }
+                        .font(.subheadline)
+                        .foregroundStyle(theme.foregroundSecondary)
                     }
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 24)
+                .animation(.default, value: voice.turns)
             }
             .defaultScrollAnchor(.bottom)
         }
@@ -187,7 +173,7 @@ struct HomeView: View {
             if voice.isRunning {
                 LiveLine(voice: voice)
             } else {
-                TextField("Message your Copilot", text: $typed, axis: .vertical)
+                TextField(voice.isWorking ? "Steer the Copilot…" : "Message your Copilot", text: $typed, axis: .vertical)
                     .lineLimit(1...5)
                     .focused($typing)
                     .foregroundStyle(theme.foreground)
@@ -278,7 +264,7 @@ private struct LiveLine: View {
             Image(systemName: icon)
                 .foregroundStyle(theme.primaryText)
                 .symbolEffect(.variableColor.iterative, isActive: voice.phase == .listening || voice.phase == .thinking)
-            Text(voice.partial.isEmpty ? status : voice.partial)
+            Text(voice.partial.isEmpty ? (voice.isWorking && voice.phase == .listening ? "Working on it. Talk to steer, or say “cancel that”." : status) : voice.partial)
                 .foregroundStyle(voice.partial.isEmpty ? theme.foregroundSecondary : theme.foreground)
                 .lineLimit(1...5)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -320,6 +306,53 @@ private struct PulseRing: View {
     }
 }
 
+/// One line of the exchange: your message as a bubble with its delivery
+/// status, the Copilot's reply as plain text, or a status note.
+private struct TurnView: View {
+    @Environment(\.theme) private var theme
+    let turn: VoiceSession.Turn
+    let server: String
+
+    var body: some View {
+        switch turn.role {
+        case .you:
+            VStack(alignment: .trailing, spacing: 5) {
+                Bubble(text: turn.text)
+                if let delivery = turn.delivery {
+                    DeliveryLabel(delivery: delivery, server: server)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        case .copilot:
+            Text(turn.text)
+                .foregroundStyle(theme.foreground)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.trailing, 24)
+        case .status:
+            Label(turn.text, systemImage: "info.circle")
+                .font(.subheadline)
+                .foregroundStyle(theme.foregroundSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+private struct Bubble: View {
+    @Environment(\.theme) private var theme
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .foregroundStyle(theme.userBubbleForeground)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(theme.userBubble, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .padding(.leading, 48)
+    }
+}
+
 /// "Sending…", "Delivered to crabcake", "Waiting for connection", or "Not sent".
 private struct DeliveryLabel: View {
     @Environment(\.theme) private var theme
@@ -336,6 +369,8 @@ private struct DeliveryLabel: View {
                 }
             case .delivered:
                 Label("Delivered to \(server)", systemImage: "checkmark")
+            case .steered:
+                Label("Steered", systemImage: "arrow.turn.down.right")
             case .queued:
                 Label("Waiting for connection", systemImage: "clock")
             case .failed:

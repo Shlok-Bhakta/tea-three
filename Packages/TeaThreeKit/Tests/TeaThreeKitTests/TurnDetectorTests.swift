@@ -19,7 +19,7 @@ struct TurnDetectorTests {
     ])
     func unfinished(_ text: String) {
         #expect(detector.ending(of: text) == .unfinished)
-        #expect(detector.requiredSilence(for: text) == 4.5)
+        #expect(detector.requiredSilence(for: text) == 5.0)
     }
 
     @Test("a short fragment without punctuation is unfinished; a short sentence is not")
@@ -31,7 +31,7 @@ struct TurnDetectorTests {
     @Test("no punctuation yet waits a little longer than a sentence")
     func uncertain() {
         #expect(detector.ending(of: "log a burrito for lunch today") == .uncertain)
-        #expect(detector.requiredSilence(for: "log a burrito for lunch today") == 2.8)
+        #expect(detector.requiredSilence(for: "log a burrito for lunch today") == 3.5)
     }
 
     @Test("wait and hold on keep the turn open much longer")
@@ -39,6 +39,13 @@ struct TurnDetectorTests {
         #expect(detector.ending(of: "Start a thread for, hold on") == .holding)
         #expect(detector.ending(of: "Wait.") == .holding)
         #expect(detector.requiredSilence(for: "let me think") == 8.0)
+    }
+
+    @Test("the default waits 3 s after a sentence and 6 s after a trailing 'and'")
+    func defaults() {
+        let standard = TurnDetector()
+        #expect(standard.requiredSilence(for: "Log a burrito for lunch.") == 3.0)
+        #expect(standard.requiredSilence(for: "So I ate a burrito and") == 6.0)
     }
 
     @Test("send it sends right away and is removed from the message")
@@ -53,7 +60,7 @@ struct TurnDetectorTests {
     @Test("the warning cue comes a second before sending, only when there's time")
     func warning() {
         #expect(detector.warningAt(for: "Log a burrito for lunch.") == 1.0)
-        #expect(detector.warningAt(for: "So I ate a burrito and") == 3.5)
+        #expect(detector.warningAt(for: "So I ate a burrito and") == 4.0)
         #expect(detector.warningAt(for: "log it send it") == nil)
     }
 
@@ -62,8 +69,8 @@ struct TurnDetectorTests {
         let said = "So I ate a burrito and"
         #expect(detector.decide(said, sinceText: 1.6, sinceSound: nil) == .listen)
         #expect(detector.decide(said, sinceText: 3.0, sinceSound: nil) == .listen)
-        #expect(detector.decide(said, sinceText: 3.6, sinceSound: nil) == .warn)
-        #expect(detector.decide(said, sinceText: 4.6, sinceSound: nil) == .send)
+        #expect(detector.decide(said, sinceText: 4.1, sinceSound: nil) == .warn)
+        #expect(detector.decide(said, sinceText: 5.1, sinceSound: nil) == .send)
     }
 
     @Test("a finished sentence warns at 1 s and sends at 2 s")

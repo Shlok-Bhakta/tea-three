@@ -135,11 +135,20 @@ public actor Copilot {
         let sent = try await send(text, source: source, attachments: attachments)
         await onEvent(.sent(threadId: sent.threadId, runId: sent.runId))
         let start = Date()
+        var runId = sent.runId
 
         while true {
             try Task.checkCancellation()
-            let waited = try await client.wait(threadId: sent.threadId, runId: sent.runId, timeout: waitWindow)
-            if waited.timedOut != true { break }
+            let waited = try await client.wait(threadId: sent.threadId, runId: runId, timeout: waitWindow)
+            if waited.timedOut != true {
+                // A steer that landed just as this turn ended starts another turn;
+                // the answer the user is waiting for comes from that one.
+                if let active = await activeRun(threadId: sent.threadId), active != runId {
+                    runId = active
+                    continue
+                }
+                break
+            }
             if waited.status == "waiting" {
                 await onEvent(.needsAttention)
                 return nil
@@ -147,9 +156,27 @@ public actor Copilot {
             await onEvent(.working(elapsed: Date().timeIntervalSince(start)))
         }
 
-        let reply = try await latestReply(threadId: sent.threadId, runId: sent.runId)
+        let reply = try await latestReply(threadId: sent.threadId, runId: runId)
         await onEvent(.finished(reply: reply))
         return reply
+    }
+
+    /// Adds to the request the Copilot is working on: a running turn takes it as
+    /// a mid-turn update, like interrupting a person mid-sentence. If the turn has
+    /// just ended it starts a new one, which a pending `ask` follows.
+    @discardableResult
+    public func steer(_ text: String, source: CopilotPrompts.Source, attachments: [OutgoingAttachment] = []) async throws -> ThreadSendResult {
+        try await send(text, source: source, attachments: attachments)
+    }
+
+    /// Stops the Copilot's running turn ("cancel that").
+    public func interrupt() async throws {
+        guard let threadId = store.copilotThreadID else { return }
+        try await client.interrupt(threadId: threadId)
+    }
+
+    private func activeRun(threadId: String) async -> String? {
+        try? await client.read(threadId: threadId, limit: 1, maxCharsPerItem: 1).thread.activeRunId
     }
 
     /// The last assistant message of a run (or of the thread when `runId` is nil).

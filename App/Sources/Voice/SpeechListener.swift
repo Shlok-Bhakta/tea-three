@@ -1,46 +1,54 @@
 import AVFoundation
-@preconcurrency import Speech
+import Speech
 import TeaThreeKit
 
-/// One turn of on-device speech-to-text. The turn ends when the speaker has
-/// actually finished, not at the first pause:
+/// One turn of on-device speech-to-text, on iOS 26's `SpeechAnalyzer` with
+/// `SpeechTranscriber`: the long-form model behind Notes and Voice Memos, and
+/// what T3 Code's own app transcribes with. It has no time limit, finalized
+/// text is kept as it arrives (so a five-minute ramble comes through whole),
+/// and nothing is censored.
+///
+/// The turn ends when the speaker has actually finished, not at the first pause:
 /// - `TurnDetector` reads the transcript: a finished sentence ends after the
 ///   normal pause, "and", "um", a comma, or a fragment waits much longer, and
 ///   "send it" sends at once.
 /// - The mic level counts too, against an adaptive noise floor, so a drawn-out
-///   "ummm" (which the recognizer usually drops) keeps the turn open.
+///   "ummm" (which the transcriber drops) keeps the turn open.
 /// - A cue plays a second before sending; speaking again keeps listening.
-/// - If the recognizer finalizes early, its text is kept and listening goes on.
+/// - When the turn ends, the analyzer finalizes everything it heard before the
+///   text is returned, so the last words aren't left in a rough draft.
 nonisolated final class SpeechListener: @unchecked Sendable {
     enum Failure: LocalizedError {
         case notAuthorized
         case unavailable
+        case unsupportedLanguage
 
         var errorDescription: String? {
             switch self {
             case .notAuthorized: "Tea Three needs microphone and speech recognition access. Turn them on in Settings."
             case .unavailable: "Speech recognition isn't available right now."
+            case .unsupportedLanguage: "On-device transcription doesn't support this phone's language yet."
             }
         }
     }
 
-    private static let maximumTurn: TimeInterval = 120
+    private static let maximumTurn: TimeInterval = 15 * 60
 
-    private let recognizer = SFSpeechRecognizer(locale: .current) ?? SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private let engine = AVAudioEngine()
     private let queue = DispatchQueue(label: "tea-three.speech")
     private let audio = AudioInput()
 
     // Guarded by `queue`.
     private var continuation: CheckedContinuation<String, Error>?
-    private var task: SFSpeechRecognitionTask?
     private var generation = 0
-    private var committed = ""
+    private var analyzer: SpeechAnalyzer?
+    private var resultsTask: Task<Void, Never>?
+    private var finalized = ""
+    private var volatile = ""
     private var latest = ""
     private var startedAt = Date()
     private var lastTextAt: Date?
     private var warned = false
-    private var restarts = 0
     private var ticker: DispatchSourceTimer?
     private var detector = TurnDetector()
     private var onPartial: (@Sendable (String) -> Void)?
@@ -54,64 +62,121 @@ nonisolated final class SpeechListener: @unchecked Sendable {
         return speech && microphone
     }
 
+    /// The phone's language, as the transcriber knows it, with its model installed.
+    private static func transcriber() async throws -> SpeechTranscriber {
+        guard SpeechTranscriber.isAvailable else { throw Failure.unavailable }
+        var locale = await SpeechTranscriber.supportedLocale(equivalentTo: .current)
+        if locale == nil { locale = await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: "en-US")) }
+        guard let locale else { throw Failure.unsupportedLanguage }
+        let transcriber = SpeechTranscriber(locale: locale, preset: .progressiveTranscription)
+        // First use downloads the language model (shared with the system, so
+        // usually already there from dictation or Notes).
+        if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
+            try await request.downloadAndInstall()
+        }
+        return transcriber
+    }
+
     /// Returns what was said once the turn ends (see the type comment), or ""
-    /// if nothing is said within `noSpeechTimeout`.
+    /// if nothing is said within `noSpeechTimeout` or `yieldIfSilent()` is called first.
     func listen(
         detector: TurnDetector,
-        noSpeechTimeout: TimeInterval = 12,
+        noSpeechTimeout: TimeInterval = 30,
         onPartial: @escaping @Sendable (String) -> Void,
         onWarning: @escaping @Sendable () -> Void = {}
     ) async throws -> String {
         guard SFSpeechRecognizer.authorizationStatus() == .authorized else { throw Failure.notAuthorized }
-        guard let recognizer, recognizer.isAvailable else { throw Failure.unavailable }
+
+        let transcriber = try await Self.transcriber()
+        let analyzer = SpeechAnalyzer(modules: [transcriber], options: .init(priority: .userInitiated, modelRetention: .lingering))
+        guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]) else {
+            throw Failure.unavailable
+        }
+        try await analyzer.prepareToAnalyze(in: format)
+        let (inputs, feed) = AsyncStream<AnalyzerInput>.makeStream(bufferingPolicy: .unbounded)
+        try await analyzer.start(inputSequence: inputs)
 
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 queue.async {
-                    self.begin(recognizer: recognizer, continuation: continuation, detector: detector,
-                               noSpeechTimeout: noSpeechTimeout, onPartial: onPartial, onWarning: onWarning)
+                    self.begin(
+                        analyzer: analyzer, transcriber: transcriber, format: format, feed: feed,
+                        continuation: continuation, detector: detector, noSpeechTimeout: noSpeechTimeout,
+                        onPartial: onPartial, onWarning: onWarning
+                    )
                 }
             }
         } onCancel: {
-            queue.async { self.finish(with: .success("")) }
+            queue.async { self.finish(sending: false) }
+        }
+    }
+
+    /// Ends the turn with "" if nothing has been said yet; otherwise lets the
+    /// speaker finish. The voice loop calls it when a reply is ready to read out.
+    func yieldIfSilent() {
+        queue.async {
+            guard self.continuation != nil, self.latest.isEmpty else { return }
+            self.finish(sending: false)
         }
     }
 
     private func begin(
-        recognizer: SFSpeechRecognizer,
+        analyzer: SpeechAnalyzer,
+        transcriber: SpeechTranscriber,
+        format: AVAudioFormat,
+        feed: AsyncStream<AnalyzerInput>.Continuation,
         continuation: CheckedContinuation<String, Error>,
         detector: TurnDetector,
         noSpeechTimeout: TimeInterval,
         onPartial: @escaping @Sendable (String) -> Void,
         onWarning: @escaping @Sendable () -> Void
     ) {
+        generation += 1
+        let mine = generation
         self.continuation = continuation
+        self.analyzer = analyzer
         self.detector = detector
         self.onPartial = onPartial
         self.onWarning = onWarning
-        committed = ""
+        finalized = ""
+        volatile = ""
         latest = ""
         lastTextAt = nil
         warned = false
-        restarts = 0
         startedAt = Date()
-        audio.reset()
+
+        resultsTask = Task { [weak self] in
+            do {
+                for try await result in transcriber.results {
+                    let text = String(result.text.characters)
+                    let isFinal = result.isFinal
+                    self?.queue.async { self?.received(text, isFinal: isFinal, generation: mine) }
+                }
+            } catch {
+                // The analyzer stopped on its own (audio interrupted, model evicted).
+                // Keep what was heard rather than throwing it away.
+                self?.queue.async {
+                    guard let self, mine == self.generation else { return }
+                    self.finish(sending: true)
+                }
+            }
+        }
 
         let input = engine.inputNode
-        let format = input.outputFormat(forBus: 0)
+        let micFormat = input.outputFormat(forBus: 0)
+        audio.start(feed: feed, from: micFormat, to: format)
         input.removeTap(onBus: 0)
         let audio = audio
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
+        input.installTap(onBus: 0, bufferSize: 4096, format: micFormat) { buffer, _ in
             audio.handle(buffer)
         }
         engine.prepare()
         do {
             try engine.start()
         } catch {
-            finish(with: .failure(error))
+            fail(error)
             return
         }
-        startRecognition(recognizer)
 
         let ticker = DispatchSource.makeTimerSource(queue: queue)
         ticker.schedule(deadline: .now() + 0.1, repeating: 0.1)
@@ -120,67 +185,38 @@ nonisolated final class SpeechListener: @unchecked Sendable {
         self.ticker = ticker
     }
 
-    /// Starts (or restarts, after the recognizer finalized early) a recognition
-    /// segment. Earlier segments' text is kept in `committed`.
-    private func startRecognition(_ recognizer: SFSpeechRecognizer) {
-        generation += 1
-        let mine = generation
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = true
-        request.addsPunctuation = true
-        request.taskHint = .dictation
-        if recognizer.supportsOnDeviceRecognition {
-            // Private, works offline, and has no one-minute server cap.
-            request.requiresOnDeviceRecognition = true
+    /// Finalized results are kept for good; the volatile one is the rough draft
+    /// of whatever comes after them, replaced as it firms up.
+    private func received(_ text: String, isFinal: Bool, generation mine: Int) {
+        guard mine == generation else { return }
+        if isFinal {
+            finalized = Self.join(finalized, text)
+            volatile = ""
+        } else {
+            volatile = text
         }
-        audio.request = request
-
-        task = recognizer.recognitionTask(with: request) { [weak self] result, error in
-            guard let self else { return }
-            let text = result?.bestTranscription.formattedString
-            let isFinal = result?.isFinal ?? false
-            let failed = error != nil
-            self.queue.async { [self] in
-                guard self.continuation != nil, mine == self.generation else { return }
-                if let text, !text.isEmpty {
-                    let combined = self.committed.isEmpty ? text : "\(self.committed) \(text)"
-                    if combined != self.latest {
-                        self.latest = combined
-                        self.lastTextAt = Date()
-                        self.onPartial?(combined)
-                    }
-                }
-                if isFinal || failed {
-                    // The recognizer ended its segment on its own, often at a
-                    // pause. Keep the words and keep listening; `tick` decides.
-                    self.committed = self.latest
-                    self.restarts += 1
-                    guard self.restarts < 20 else {
-                        self.finish(with: .success(TurnDetector.removingSendPhrase(self.latest)))
-                        return
-                    }
-                    self.task?.cancel()
-                    self.startRecognition(recognizer)
-                }
-            }
-        }
+        let combined = Self.join(finalized, volatile)
+        guard combined != latest else { return }
+        latest = combined
+        lastTextAt = Date()
+        if continuation != nil { onPartial?(combined) }
     }
 
     private func tick(noSpeechTimeout: TimeInterval) {
         guard continuation != nil else { return }
         let now = Date()
         if now.timeIntervalSince(startedAt) > Self.maximumTurn {
-            finish(with: .success(TurnDetector.removingSendPhrase(latest)))
+            finish(sending: true)
             return
         }
         guard let lastTextAt else {
-            if now.timeIntervalSince(startedAt) > noSpeechTimeout { finish(with: .success("")) }
+            if now.timeIntervalSince(startedAt) > noSpeechTimeout { finish(sending: false) }
             return
         }
         let sinceSound = audio.lastVoiceAt.map { now.timeIntervalSince($0) }
         switch detector.decide(latest, sinceText: now.timeIntervalSince(lastTextAt), sinceSound: sinceSound) {
         case .send:
-            finish(with: .success(TurnDetector.removingSendPhrase(latest)))
+            finish(sending: true)
         case .warn:
             if !warned {
                 warned = true
@@ -191,7 +227,41 @@ nonisolated final class SpeechListener: @unchecked Sendable {
         }
     }
 
-    private func finish(with result: Result<String, Error>) {
+    /// Stops the mic. When sending, waits for the analyzer to finalize the rest
+    /// of what it heard, then returns the whole transcript.
+    private func finish(sending: Bool) {
+        guard let continuation else { return }
+        self.continuation = nil
+        ticker?.cancel()
+        ticker = nil
+        engine.stop()
+        engine.inputNode.removeTap(onBus: 0)
+        audio.stop()
+        let analyzer = self.analyzer
+        let results = resultsTask
+        self.analyzer = nil
+        resultsTask = nil
+
+        guard sending else {
+            generation += 1
+            results?.cancel()
+            Task { await analyzer?.cancelAndFinishNow() }
+            continuation.resume(returning: "")
+            return
+        }
+        Task { [self] in
+            try? await analyzer?.finalizeAndFinishThroughEndOfInput()
+            await results?.value
+            // `received` hops onto `queue`, so this runs after the last of them.
+            queue.async { [self] in
+                generation += 1
+                let text = TurnDetector.removingSendPhrase(Self.join(finalized, volatile))
+                continuation.resume(returning: text.trimmingCharacters(in: .whitespacesAndNewlines))
+            }
+        }
+    }
+
+    private func fail(_ error: Error) {
         guard let continuation else { return }
         self.continuation = nil
         generation += 1
@@ -199,46 +269,84 @@ nonisolated final class SpeechListener: @unchecked Sendable {
         ticker = nil
         engine.stop()
         engine.inputNode.removeTap(onBus: 0)
-        audio.request?.endAudio()
-        audio.request = nil
-        task?.cancel()
-        task = nil
-        continuation.resume(with: result.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) })
+        audio.stop()
+        resultsTask?.cancel()
+        resultsTask = nil
+        let analyzer = self.analyzer
+        self.analyzer = nil
+        Task { await analyzer?.cancelAndFinishNow() }
+        continuation.resume(throwing: error)
+    }
+
+    private static func join(_ head: String, _ tail: String) -> String {
+        let head = head.trimmingCharacters(in: .whitespaces)
+        let tail = tail.trimmingCharacters(in: .whitespaces)
+        if head.isEmpty { return tail }
+        if tail.isEmpty { return head }
+        return "\(head) \(tail)"
     }
 }
 
-/// The mic tap's side: forwards audio to the current recognition request and
-/// tracks voice activity against an adaptive noise floor (road noise, AC).
+/// The mic tap's side: converts audio to the analyzer's format and feeds it,
+/// and tracks voice activity against an adaptive noise floor (road noise, AC).
 /// Called on the audio thread, so it's lock-protected.
 nonisolated private final class AudioInput: @unchecked Sendable {
     private let lock = NSLock()
-    private var _request: SFSpeechAudioBufferRecognitionRequest?
+    private var feed: AsyncStream<AnalyzerInput>.Continuation?
+    private var converter: AVAudioConverter?
+    private var target: AVAudioFormat?
     private var _lastVoiceAt: Date?
     private var noiseFloor: Float = -50
 
-    var request: SFSpeechAudioBufferRecognitionRequest? {
-        get { lock.withLock { _request } }
-        set { lock.withLock { _request = newValue } }
-    }
-
     var lastVoiceAt: Date? { lock.withLock { _lastVoiceAt } }
 
-    func reset() {
+    func start(feed: AsyncStream<AnalyzerInput>.Continuation, from source: AVAudioFormat, to target: AVAudioFormat) {
         lock.withLock {
+            self.feed = feed
+            self.target = target
+            converter = source == target ? nil : AVAudioConverter(from: source, to: target)
             _lastVoiceAt = nil
             noiseFloor = -50
+        }
+    }
+
+    func stop() {
+        lock.withLock {
+            feed?.finish()
+            feed = nil
+            converter = nil
         }
     }
 
     func handle(_ buffer: AVAudioPCMBuffer) {
         let level = Self.level(of: buffer)
         lock.withLock {
-            _request?.append(buffer)
+            guard let feed else { return }
+            if let converted = convert(buffer) { feed.yield(AnalyzerInput(buffer: converted)) }
             // Falls fast to quiet, rises slowly, so steady noise becomes the floor
             // while speech stands out above it.
             noiseFloor = level < noiseFloor ? level : noiseFloor + (level - noiseFloor) * 0.005
             if level > noiseFloor + 12, level > -52 { _lastVoiceAt = Date() }
         }
+    }
+
+    private func convert(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        guard let converter, let target else { return buffer }
+        let ratio = target.sampleRate / buffer.format.sampleRate
+        let capacity = AVAudioFrameCount((Double(buffer.frameLength) * ratio).rounded(.up)) + 16
+        guard let output = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity) else { return nil }
+        var consumed = false
+        var error: NSError?
+        let status = converter.convert(to: output, error: &error) { _, inputStatus in
+            if consumed {
+                inputStatus.pointee = .noDataNow
+                return nil
+            }
+            consumed = true
+            inputStatus.pointee = .haveData
+            return buffer
+        }
+        return status == .error || output.frameLength == 0 ? nil : output
     }
 
     private static func level(of buffer: AVAudioPCMBuffer) -> Float {

@@ -142,6 +142,48 @@ struct CopilotTests {
         #expect(await events.events.contains(.needsAttention))
     }
 
+    @Test("a steer that started a new turn is followed to its answer")
+    func followsSteeredTurn() async throws {
+        let server = FakeT3()
+        let fixture = readFixture
+        let waits = Counter()
+        server.toolHandler = { name, args in
+            switch name {
+            case "t3_thread_read" where args["limit"] == 1:
+                // After run-1: the steer started run-2. After that run, nothing's active.
+                var read = fixture
+                if waits.value == 1, case .object(var thread)? = read["thread"], case .object(var root) = read {
+                    thread["activeRunId"] = "run-2"
+                    root["thread"] = .object(thread)
+                    read = .object(root)
+                }
+                return read
+            case "t3_thread_wait":
+                _ = waits.increment()
+                return ["threadId": "c", "runId": args["runId"] ?? .null, "status": "idle", "timedOut": false]
+            default:
+                return nil
+            }
+        }
+        let store = SharedStore.ephemeral()
+        store.copilotThreadID = copilotThreadId
+        let copilot = Copilot(client: .fake(server), settings: .default, store: store)
+        _ = try await copilot.ask("log a burrito")
+        let waitedOn = server.calls(to: "t3_thread_wait").map { $0.arguments["runId"] }
+        #expect(waitedOn == ["run-1", "run-2"])
+    }
+
+    @Test("steering sends with auto, so a running turn takes it mid-turn")
+    func steerUsesAuto() async throws {
+        let server = FakeT3()
+        let store = SharedStore.ephemeral()
+        store.copilotThreadID = copilotThreadId
+        try await Copilot(client: .fake(server), settings: .default, store: store).steer("actually make it two", source: .voice)
+        let send = try #require(server.calls(to: "t3_thread_send").first?.arguments)
+        #expect(send["mode"] == "auto")
+        #expect(send["message"]?.stringValue?.contains("actually make it two") == true)
+    }
+
     @Test("read cursor: later asks don't re-read the whole thread")
     func readCursor() async throws {
         let server = FakeT3()
