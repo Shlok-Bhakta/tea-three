@@ -40,11 +40,11 @@ nonisolated final class SpeechListener: @unchecked Sendable {
 
     // Guarded by `queue`.
     private var continuation: CheckedContinuation<String, Error>?
-    private var generation = 0
+    private var current: Listen?
     private var analyzer: SpeechAnalyzer?
     private var resultsTask: Task<Void, Never>?
-    private var finalized = ""
-    private var volatile = ""
+    /// A reply is ready: end the turn as soon as it's clear nobody is talking.
+    private var yieldRequested = false
     private var latest = ""
     private var startedAt = Date()
     private var lastTextAt: Date?
@@ -96,31 +96,35 @@ nonisolated final class SpeechListener: @unchecked Sendable {
         let (inputs, feed) = AsyncStream<AnalyzerInput>.makeStream(bufferingPolicy: .unbounded)
         try await analyzer.start(inputSequence: inputs)
 
+        // Owns this turn's transcript, and records a cancel that lands before
+        // `begin` (so the mic never starts for a listen that was already stopped).
+        let listen = Listen()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 queue.async {
                     self.begin(
-                        analyzer: analyzer, transcriber: transcriber, format: format, feed: feed,
+                        listen, analyzer: analyzer, transcriber: transcriber, format: format, feed: feed,
                         continuation: continuation, detector: detector, noSpeechTimeout: noSpeechTimeout,
                         onPartial: onPartial, onWarning: onWarning
                     )
                 }
             }
         } onCancel: {
-            queue.async { self.finish(sending: false) }
+            listen.cancel()
+            queue.async { if self.current === listen { self.finish(sending: false) } }
         }
     }
 
-    /// Ends the turn with "" if nothing has been said yet; otherwise lets the
-    /// speaker finish. The voice loop calls it when a reply is ready to read out.
+    /// Ends the turn with "" once it's clear nothing is being said (no words and
+    /// no voice on the mic); otherwise lets the speaker finish. The voice loop
+    /// calls it when a reply is ready to read out. Carries over to the next
+    /// listen if none is running.
     func yieldIfSilent() {
-        queue.async {
-            guard self.continuation != nil, self.latest.isEmpty else { return }
-            self.finish(sending: false)
-        }
+        queue.async { self.yieldRequested = true }
     }
 
     private func begin(
+        _ listen: Listen,
         analyzer: SpeechAnalyzer,
         transcriber: SpeechTranscriber,
         format: AVAudioFormat,
@@ -131,15 +135,18 @@ nonisolated final class SpeechListener: @unchecked Sendable {
         onPartial: @escaping @Sendable (String) -> Void,
         onWarning: @escaping @Sendable () -> Void
     ) {
-        generation += 1
-        let mine = generation
+        guard !listen.isCancelled else {
+            feed.finish()
+            Task { await analyzer.cancelAndFinishNow() }
+            continuation.resume(returning: "")
+            return
+        }
+        current = listen
         self.continuation = continuation
         self.analyzer = analyzer
         self.detector = detector
         self.onPartial = onPartial
         self.onWarning = onWarning
-        finalized = ""
-        volatile = ""
         latest = ""
         lastTextAt = nil
         warned = false
@@ -150,13 +157,13 @@ nonisolated final class SpeechListener: @unchecked Sendable {
                 for try await result in transcriber.results {
                     let text = String(result.text.characters)
                     let isFinal = result.isFinal
-                    self?.queue.async { self?.received(text, isFinal: isFinal, generation: mine) }
+                    self?.queue.async { self?.received(text, isFinal: isFinal, in: listen) }
                 }
             } catch {
                 // The analyzer stopped on its own (audio interrupted, model evicted).
                 // Keep what was heard rather than throwing it away.
                 self?.queue.async {
-                    guard let self, mine == self.generation else { return }
+                    guard let self, self.current === listen else { return }
                     self.finish(sending: true)
                 }
             }
@@ -187,19 +194,20 @@ nonisolated final class SpeechListener: @unchecked Sendable {
 
     /// Finalized results are kept for good; the volatile one is the rough draft
     /// of whatever comes after them, replaced as it firms up.
-    private func received(_ text: String, isFinal: Bool, generation mine: Int) {
-        guard mine == generation else { return }
+    private func received(_ text: String, isFinal: Bool, in listen: Listen) {
         if isFinal {
-            finalized = Self.join(finalized, text)
-            volatile = ""
+            listen.finalized = Self.join(listen.finalized, text)
+            listen.volatile = ""
         } else {
-            volatile = text
+            listen.volatile = text
         }
-        let combined = Self.join(finalized, volatile)
+        // A turn still finalizing after it ended updates only its own transcript.
+        guard listen === current, continuation != nil else { return }
+        let combined = listen.transcript
         guard combined != latest else { return }
         latest = combined
         lastTextAt = Date()
-        if continuation != nil { onPartial?(combined) }
+        onPartial?(combined)
     }
 
     private func tick(noSpeechTimeout: TimeInterval) {
@@ -209,11 +217,16 @@ nonisolated final class SpeechListener: @unchecked Sendable {
             finish(sending: true)
             return
         }
+        let sinceSound = audio.lastVoiceAt.map { now.timeIntervalSince($0) }
+        // Words can lag the mic by a moment; don't cut off someone just starting.
+        if yieldRequested, latest.isEmpty, (sinceSound ?? .infinity) > 1.5 {
+            finish(sending: false)
+            return
+        }
         guard let lastTextAt else {
             if now.timeIntervalSince(startedAt) > noSpeechTimeout { finish(sending: false) }
             return
         }
-        let sinceSound = audio.lastVoiceAt.map { now.timeIntervalSince($0) }
         switch detector.decide(latest, sinceText: now.timeIntervalSince(lastTextAt), sinceSound: sinceSound) {
         case .send:
             finish(sending: true)
@@ -230,8 +243,10 @@ nonisolated final class SpeechListener: @unchecked Sendable {
     /// Stops the mic. When sending, waits for the analyzer to finalize the rest
     /// of what it heard, then returns the whole transcript.
     private func finish(sending: Bool) {
-        guard let continuation else { return }
+        guard let continuation, let listen = current else { return }
         self.continuation = nil
+        current = nil
+        yieldRequested = false
         ticker?.cancel()
         ticker = nil
         engine.stop()
@@ -243,7 +258,6 @@ nonisolated final class SpeechListener: @unchecked Sendable {
         resultsTask = nil
 
         guard sending else {
-            generation += 1
             results?.cancel()
             Task { await analyzer?.cancelAndFinishNow() }
             continuation.resume(returning: "")
@@ -253,9 +267,8 @@ nonisolated final class SpeechListener: @unchecked Sendable {
             try? await analyzer?.finalizeAndFinishThroughEndOfInput()
             await results?.value
             // `received` hops onto `queue`, so this runs after the last of them.
-            queue.async { [self] in
-                generation += 1
-                let text = TurnDetector.removingSendPhrase(Self.join(finalized, volatile))
+            queue.async {
+                let text = TurnDetector.removingSendPhrase(listen.transcript)
                 continuation.resume(returning: text.trimmingCharacters(in: .whitespacesAndNewlines))
             }
         }
@@ -264,7 +277,8 @@ nonisolated final class SpeechListener: @unchecked Sendable {
     private func fail(_ error: Error) {
         guard let continuation else { return }
         self.continuation = nil
-        generation += 1
+        current = nil
+        yieldRequested = false
         ticker?.cancel()
         ticker = nil
         engine.stop()
@@ -284,6 +298,24 @@ nonisolated final class SpeechListener: @unchecked Sendable {
         if head.isEmpty { return tail }
         if tail.isEmpty { return head }
         return "\(head) \(tail)"
+    }
+}
+
+/// One listen's own state. The transcript lives here, not on the listener, so
+/// a turn still finalizing can't read (or be overwritten by) the next one.
+nonisolated private final class Listen: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancelled = false
+    // Guarded by the listener's queue.
+    var finalized = ""
+    var volatile = ""
+
+    var isCancelled: Bool { lock.withLock { cancelled } }
+    func cancel() { lock.withLock { cancelled = true } }
+
+    /// Finalized text plus the rough draft of whatever comes after it.
+    var transcript: String {
+        [finalized, volatile].map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: " ")
     }
 }
 

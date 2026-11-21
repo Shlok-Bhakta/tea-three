@@ -47,7 +47,7 @@ public final class SharedStore: @unchecked Sendable {
         }
     }
 
-    func readCursor(threadId: String) -> Int? {
+    public func readCursor(threadId: String) -> Int? {
         guard let stored = defaults.dictionary(forKey: Key.readCursor), stored["threadId"] as? String == threadId else {
             return nil
         }
@@ -64,10 +64,12 @@ public final class SharedStore: @unchecked Sendable {
         lock.withLock { decode([OutboxItem].self, Key.outbox) ?? [] }
     }
 
-    public func enqueue(_ text: String, source: CopilotPrompts.Source) {
+    /// `id` is the send's retry key: reuse the live attempt's so a send the
+    /// server did get isn't run twice.
+    public func enqueue(_ text: String, source: CopilotPrompts.Source, id: String = UUID().uuidString) {
         lock.withLock {
             var items = decode([OutboxItem].self, Key.outbox) ?? []
-            items.append(OutboxItem(id: UUID().uuidString, text: text, source: source, createdAt: Date()))
+            items.append(OutboxItem(id: id, text: text, source: source, createdAt: Date()))
             encode(items, Key.outbox)
         }
     }

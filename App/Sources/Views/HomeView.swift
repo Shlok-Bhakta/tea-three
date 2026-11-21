@@ -172,14 +172,14 @@ struct HomeView: View {
             PendingPhotosStrip()
             if voice.isRunning {
                 LiveLine(voice: voice)
-            } else {
-                TextField(voice.isWorking ? "Steer the Copilot…" : "Message your Copilot", text: $typed, axis: .vertical)
-                    .lineLimit(1...5)
-                    .focused($typing)
-                    .foregroundStyle(theme.foreground)
-                    .padding(.horizontal, 4)
-                    .onSubmit(sendTyped)
             }
+            // Stays while talking hands-free, so a steer can be typed too.
+            TextField(voice.isWorking ? "Steer the Copilot…" : "Message your Copilot", text: $typed, axis: .vertical)
+                .lineLimit(1...5)
+                .focused($typing)
+                .foregroundStyle(theme.foreground)
+                .padding(.horizontal, 4)
+                .onSubmit(sendTyped)
             HStack(spacing: 8) {
                 PhotoButton()
                     .disabled(!hasModel)

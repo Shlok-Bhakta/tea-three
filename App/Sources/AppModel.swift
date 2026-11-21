@@ -125,8 +125,10 @@ final class AppModel {
         connection = status
         connectionCheckedAt = Date()
         // Back online: load what the first launch couldn't, and send what waited.
-        if status.isConnected, !wasConnected {
-            if capabilities == nil { await refresh() } else { await flushOutbox() }
+        if status.isConnected, !wasConnected, capabilities == nil {
+            await refresh()
+        } else if status.isConnected, !service.store.outbox.isEmpty {
+            await flushOutbox()
         }
     }
 
@@ -161,7 +163,7 @@ final class AppModel {
 
     func flushOutbox() async {
         if let copilot = try? service.copilot() {
-            await copilot.flushOutbox()
+            voice.outboxSettled(await copilot.flushOutbox())
         }
         outboxCount = service.store.outbox.count
     }

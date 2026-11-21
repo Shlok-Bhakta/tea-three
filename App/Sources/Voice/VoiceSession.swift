@@ -54,6 +54,15 @@ final class VoiceSession {
     @ObservationIgnored private let speaker = Speaker()
     @ObservationIgnored private var loop: Task<Void, Never>?
     @ObservationIgnored private var work: Task<Void, Never>?
+    /// The message that started the current work, for its delivery label.
+    @ObservationIgnored private var workTurn: UUID?
+    /// Turns a steer started because the previous one had just ended. Their
+    /// replies are awaited after the current one.
+    @ObservationIgnored private var followUps: [FollowUp] = []
+    /// Queued messages by retry key, so their label updates when the outbox sends them.
+    @ObservationIgnored private var queuedTurns: [String: UUID] = [:]
+    /// A Stop in flight; new messages wait for it, so they aren't stopped too.
+    @ObservationIgnored private var stopping: Task<Bool, Never>?
     /// Replies that came back while you were talking, read out when you finish.
     @ObservationIgnored private var unspoken: [String] = []
 
@@ -103,19 +112,34 @@ final class VoiceSession {
         await submit(trimmed, source: .typed, speak: isRunning && service.store.settings.speakReplies, attachments: photos)
     }
 
-    /// Stops the request the Copilot is working on.
-    func interrupt() async {
-        guard isWorking else { return }
-        work?.cancel()
-        work = nil
-        isWorking = false
-        if !isRunning { phase = .idle }
-        do {
-            try await service.copilot().interrupt()
-            turns.append(Turn(role: .status, text: "Stopped."))
-        } catch {
-            turns.append(Turn(role: .status, text: "Couldn't stop it: \(error.localizedDescription)"))
+    /// Stops the request the Copilot is working on. True if it was stopped.
+    @discardableResult
+    func interrupt() async -> Bool {
+        if let stopping { return await stopping.value }
+        guard isWorking else { return false }
+        let task = Task { () -> Bool in
+            do {
+                // No Copilot thread yet means the first message is still being set up.
+                guard try await service.copilot().interrupt() else {
+                    note("Can't stop it yet, it's still starting.")
+                    return false
+                }
+            } catch {
+                note("Couldn't stop it: \(error.localizedDescription)")
+                return false
+            }
+            work?.cancel()
+            work = nil
+            followUps = []
+            isWorking = false
+            if let workTurn, delivery(of: workTurn) == .sending { mark(workTurn, .failed) }
+            if !isRunning { phase = .idle }
+            note("Stopped.")
+            return true
         }
+        stopping = task
+        defer { stopping = nil }
+        return await task.value
     }
 
     private static func label(_ text: String, photos: Int) -> String {
@@ -175,8 +199,7 @@ final class VoiceSession {
                 return
             }
             if isWorking, Self.matches(heard, Self.cancelPhrases) {
-                await interrupt()
-                await say("Stopped.")
+                await say(await interrupt() ? "Stopped." : "I couldn't stop it.")
                 continue
             }
             await submit(heard, source: .voice, speak: settings.speakReplies, attachments: takeAttachments())
@@ -189,6 +212,7 @@ final class VoiceSession {
     private func submit(_ text: String, source: CopilotPrompts.Source, speak: Bool, attachments: [OutgoingAttachment]) async {
         let turn = Turn(role: .you, text: Self.label(text, photos: attachments.count), delivery: .sending)
         turns.append(turn)
+        _ = await stopping?.value
         if isWorking {
             await steer(text, turn: turn.id, source: source, attachments: attachments, speak: speak)
         } else {
@@ -197,59 +221,115 @@ final class VoiceSession {
     }
 
     private func steer(_ text: String, turn: UUID, source: CopilotPrompts.Source, attachments: [OutgoingAttachment], speak: Bool) async {
+        let requestID = UUID().uuidString
+        if await isUnreachable() {
+            guard !Task.isCancelled else { return }
+            await undelivered(text, turn: turn, requestID: requestID, attachments: attachments, speak: speak)
+            return
+        }
+        // If this starts a new turn, its reply comes after here. Taken before sending,
+        // since the current turn's lookup may move the shared read position past it.
+        let readFrom = service.store.copilotThreadID.flatMap { service.store.readCursor(threadId: $0) } ?? 0
         do {
-            try await service.copilot().steer(text, source: source, attachments: attachments)
-            mark(turn, .steered)
-        } catch let error as T3Error {
-            if case .transport = error {
-                await undelivered(text, turn: turn, attachments: attachments, speak: speak)
-            } else {
-                mark(turn, .failed)
-                note(error.errorDescription ?? "Couldn't send that.")
+            let sent = try await service.copilot().steer(text, source: source, attachments: attachments, requestID: requestID)
+            guard sent.delivery != "steered" else {
+                mark(turn, .steered)
+                return
             }
+            // The turn had just ended, so this started (or queued) a new one: wait for its reply too.
+            mark(turn, .delivered)
+            // A Stop in flight clears follow-ups; decide after it, so this run isn't dropped.
+            _ = await stopping?.value
+            let followUp = FollowUp(sent: sent, readFrom: readFrom)
+            if isWorking {
+                followUps.append(followUp)
+            } else {
+                startWork(turn: turn, speak: speak) { await self.follow(followUp) }
+            }
+        } catch _ where Task.isCancelled {
+            return
+        } catch T3Error.transport {
+            await undelivered(text, turn: turn, requestID: requestID, attachments: attachments, speak: speak)
         } catch is URLError {
-            await undelivered(text, turn: turn, attachments: attachments, speak: speak)
+            await undelivered(text, turn: turn, requestID: requestID, attachments: attachments, speak: speak)
         } catch {
             mark(turn, .failed)
-            note(error.localizedDescription)
+            note((error as? T3Error)?.errorDescription ?? error.localizedDescription)
         }
     }
 
     /// Sends and waits for the reply in the background, so listening (and
     /// steering) carries on meanwhile.
     private func startWork(_ text: String, turn: UUID, source: CopilotPrompts.Source, speak: Bool, attachments: [OutgoingAttachment]) {
+        startWork(turn: turn, speak: speak) {
+            await self.respond(to: text, turn: turn, source: source, attachments: attachments)
+        }
+    }
+
+    private func startWork(turn: UUID, speak: Bool, first: @escaping () async -> Reply?) {
         isWorking = true
+        workTurn = turn
         if !isRunning { phase = .thinking }
         work = Task {
-            let reply = await respond(to: text, turn: turn, source: source, attachments: attachments, speak: speak)
+            var reply = await first()
+            while !Task.isCancelled {
+                if let reply { await publish(reply, speak: speak) }
+                guard !followUps.isEmpty else { break }
+                reply = await follow(followUps.removeFirst())
+            }
             guard !Task.isCancelled else { return }
             work = nil
             isWorking = false
             if !isRunning, phase == .thinking { phase = .idle }
-            guard let reply else { return }
-            turns.append(Turn(role: reply.role, text: reply.text))
-            guard speak else { return }
-            if isRunning {
-                // Read it out between turns, not over someone mid-sentence.
-                unspoken.append(reply.text)
-                listener.yieldIfSilent()
-            } else {
-                await say(reply.text)
-                phase = .idle
-            }
         }
     }
 
+    private func publish(_ reply: Reply, speak: Bool) async {
+        turns.append(Turn(role: reply.role, text: reply.text))
+        guard speak else { return }
+        if isRunning {
+            // Read it out between turns, not over someone mid-sentence.
+            unspoken.append(reply.text)
+            listener.yieldIfSilent()
+        } else {
+            await say(reply.text)
+        }
+    }
+
+    struct FollowUp {
+        let sent: ThreadSendResult
+        let readFrom: Int
+    }
+
+    /// The reply to a turn a steer started.
+    private func follow(_ followUp: FollowUp) async -> Reply? {
+        let sent = followUp.sent
+        do {
+            let blocked = Flag()
+            let answer = try await service.copilot().awaitReply(threadId: sent.threadId, runId: sent.runId, readingAfter: followUp.readFrom) { event in
+                if case .needsAttention = event { blocked.set() }
+            }
+            if blocked.isSet { return (.copilot, "That's waiting on an approval in T3 Code.") }
+            return (.copilot, answer ?? "Done.")
+        } catch {
+            return Task.isCancelled ? nil : (.copilot, "Something went wrong: \(error.localizedDescription)")
+        }
+    }
+
+    typealias Reply = (role: Turn.Role, text: String)
+
     /// The Copilot's answer (or a status line), or nil when cancelled.
-    private func respond(to text: String, turn: UUID, source: CopilotPrompts.Source, attachments: [OutgoingAttachment], speak: Bool) async -> (role: Turn.Role, text: String)? {
-        // Known offline and still not answering: save it rather than wait out a timeout.
-        if isOffline(), await !service.checkConnection(timeout: 3).isConnected {
-            return undeliveredReply(text, turn: turn, attachments: attachments)
+    private func respond(to text: String, turn: UUID, source: CopilotPrompts.Source, attachments: [OutgoingAttachment]) async -> Reply? {
+        // One retry key for the live send and any queued retry of it.
+        let requestID = UUID().uuidString
+        if await isUnreachable() {
+            guard !Task.isCancelled else { return nil }
+            return undeliveredReply(text, turn: turn, requestID: requestID, attachments: attachments)
         }
         do {
             let copilot = try service.copilot()
             let blocked = Flag()
-            let answer = try await copilot.ask(text, source: source, attachments: attachments) { event in
+            let answer = try await copilot.ask(text, source: source, attachments: attachments, requestID: requestID) { event in
                 switch event {
                 case .sent:
                     await self.mark(turn, .delivered)
@@ -261,19 +341,21 @@ final class VoiceSession {
             }
             if blocked.isSet { return (.copilot, "That's waiting on an approval in T3 Code.") }
             return (.copilot, answer ?? "Done.")
+        } catch _ where Task.isCancelled {
+            // Stopped (URLSession reports that as a transport error): not an offline send.
+            return nil
         } catch is CancellationError {
             return nil
         } catch let error as T3Error {
             if case .transport = error, delivery(of: turn) == .sending {
-                return undeliveredReply(text, turn: turn, attachments: attachments)
+                return undeliveredReply(text, turn: turn, requestID: requestID, attachments: attachments)
             }
             if delivery(of: turn) == .sending { mark(turn, .failed) }
             if case .unauthorized = error { stop() }
             return (.copilot, error.spokenDescription)
         } catch is URLError where delivery(of: turn) == .sending {
-            return undeliveredReply(text, turn: turn, attachments: attachments)
+            return undeliveredReply(text, turn: turn, requestID: requestID, attachments: attachments)
         } catch {
-            if Task.isCancelled { return nil }
             if delivery(of: turn) == .sending { mark(turn, .failed) }
             return (.copilot, "Something went wrong: \(error.localizedDescription)")
         }
@@ -281,22 +363,35 @@ final class VoiceSession {
 
     /// The server can't be reached. Words wait in the outbox and go out when it's
     /// back; photos can't, so those are reported as not sent.
-    private func undeliveredReply(_ text: String, turn: UUID, attachments: [OutgoingAttachment]) -> (role: Turn.Role, text: String) {
-        onDeliveryProblem()
+    private func undeliveredReply(_ text: String, turn: UUID, requestID: String, attachments: [OutgoingAttachment]) -> Reply {
+        defer { onDeliveryProblem() }
         if attachments.isEmpty, !text.isEmpty {
             // Sent later, when nobody's waiting on the reply: same as a Siri drop.
-            service.store.enqueue(text, source: .siri)
+            service.store.enqueue(text, source: .siri, id: requestID)
             mark(turn, .queued)
+            queuedTurns[requestID] = turn
             return (.status, "Can't reach T3 Code right now. I saved that and will send it when you're connected.")
         }
         mark(turn, .failed)
         return (.status, "Can't reach T3 Code right now, so that wasn't sent. Try again once you're connected.")
     }
 
-    private func undelivered(_ text: String, turn: UUID, attachments: [OutgoingAttachment], speak: Bool) async {
-        let reply = undeliveredReply(text, turn: turn, attachments: attachments)
-        turns.append(Turn(role: reply.role, text: reply.text))
-        if speak { await say(reply.text) }
+    private func undelivered(_ text: String, turn: UUID, requestID: String, attachments: [OutgoingAttachment], speak: Bool) async {
+        await publish(undeliveredReply(text, turn: turn, requestID: requestID, attachments: attachments), speak: speak)
+    }
+
+    /// Known offline and still not answering: save the message rather than wait out a timeout.
+    private func isUnreachable() async -> Bool {
+        guard isOffline() else { return false }
+        return await !service.checkConnection(timeout: 3).isConnected
+    }
+
+    /// The outbox sent (true) or gave up on (false) some queued messages.
+    func outboxSettled(_ outcomes: [String: Bool]) {
+        for (id, sent) in outcomes {
+            guard let turn = queuedTurns.removeValue(forKey: id) else { continue }
+            mark(turn, sent ? .delivered : .failed)
+        }
     }
 
     private func mark(_ turn: UUID, _ delivery: Turn.Delivery) {

@@ -142,35 +142,13 @@ struct CopilotTests {
         #expect(await events.events.contains(.needsAttention))
     }
 
-    @Test("a steer that started a new turn is followed to its answer")
-    func followsSteeredTurn() async throws {
+    @Test("a message's retry key is the one given, so a queued retry can reuse it")
+    func requestIDCarried() async throws {
         let server = FakeT3()
-        let fixture = readFixture
-        let waits = Counter()
-        server.toolHandler = { name, args in
-            switch name {
-            case "t3_thread_read" where args["limit"] == 1:
-                // After run-1: the steer started run-2. After that run, nothing's active.
-                var read = fixture
-                if waits.value == 1, case .object(var thread)? = read["thread"], case .object(var root) = read {
-                    thread["activeRunId"] = "run-2"
-                    root["thread"] = .object(thread)
-                    read = .object(root)
-                }
-                return read
-            case "t3_thread_wait":
-                _ = waits.increment()
-                return ["threadId": "c", "runId": args["runId"] ?? .null, "status": "idle", "timedOut": false]
-            default:
-                return nil
-            }
-        }
         let store = SharedStore.ephemeral()
         store.copilotThreadID = copilotThreadId
-        let copilot = Copilot(client: .fake(server), settings: .default, store: store)
-        _ = try await copilot.ask("log a burrito")
-        let waitedOn = server.calls(to: "t3_thread_wait").map { $0.arguments["runId"] }
-        #expect(waitedOn == ["run-1", "run-2"])
+        _ = try await Copilot(client: .fake(server), settings: .default, store: store).ask("log a burrito", requestID: "req-1")
+        #expect(server.calls(to: "t3_thread_send").first?.arguments["clientRequestId"] == "req-1")
     }
 
     @Test("steering sends with auto, so a running turn takes it mid-turn")
@@ -182,6 +160,18 @@ struct CopilotTests {
         let send = try #require(server.calls(to: "t3_thread_send").first?.arguments)
         #expect(send["mode"] == "auto")
         #expect(send["message"]?.stringValue?.contains("actually make it two") == true)
+    }
+
+    @Test("a steered turn's reply is read from before the steer, not the shared cursor")
+    func followUpReadsFromItsOwnStart() async throws {
+        let server = FakeT3()
+        let store = SharedStore.ephemeral()
+        store.copilotThreadID = copilotThreadId
+        store.setReadCursor(14, threadId: copilotThreadId)
+        _ = try await Copilot(client: .fake(server), settings: .default, store: store)
+            .awaitReply(threadId: copilotThreadId, runId: "run-2", readingAfter: 3)
+        let read = server.calls(to: "t3_thread_read").map(\.arguments).first { $0["limit"] == 50 }
+        #expect(read?["afterPosition"] == 3)
     }
 
     @Test("read cursor: later asks don't re-read the whole thread")
@@ -210,6 +200,24 @@ struct DropTests {
         #expect(result.delivered)
         #expect(result.dialog == "Sent.")
         #expect(server.calls(to: "t3_thread_send").first?.arguments["message"]?.stringValue?.hasSuffix("\nlog a burrito") == true)
+    }
+
+    @Test("flushing reports each queued message as sent or rejected")
+    func flushOutcomes() async throws {
+        let server = FakeT3()
+        server.toolHandler = { name, args in
+            if name == "t3_thread_send", args["clientRequestId"] == "bad" {
+                throw FakeT3.ToolFailure(code: "invalid_request", message: "nope")
+            }
+            return nil
+        }
+        let store = SharedStore.ephemeral()
+        store.copilotThreadID = try Fixture.json("t3_thread_read-copilot")["thread"]?["threadId"]?.stringValue
+        store.enqueue("log a burrito", source: .siri, id: "good")
+        store.enqueue("???", source: .siri, id: "bad")
+        let outcomes = await Copilot(client: .fake(server), settings: .default, store: store).flushOutbox()
+        #expect(outcomes == ["good": true, "bad": false])
+        #expect(store.outbox.isEmpty)
     }
 
     @Test("offline drop is saved and sent next time")

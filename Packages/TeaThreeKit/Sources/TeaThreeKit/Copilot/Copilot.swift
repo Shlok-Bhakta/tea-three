@@ -129,26 +129,29 @@ public actor Copilot {
         _ text: String,
         source: CopilotPrompts.Source = .voice,
         attachments: [OutgoingAttachment] = [],
+        requestID: String = UUID().uuidString,
         waitWindow: TimeInterval = 20,
         onEvent: @Sendable (Event) async -> Void = { _ in }
     ) async throws -> String? {
-        let sent = try await send(text, source: source, attachments: attachments)
+        let sent = try await send(text, source: source, attachments: attachments, requestID: requestID)
         await onEvent(.sent(threadId: sent.threadId, runId: sent.runId))
-        let start = Date()
-        var runId = sent.runId
+        return try await awaitReply(threadId: sent.threadId, runId: sent.runId, waitWindow: waitWindow, onEvent: onEvent)
+    }
 
+    /// Waits for a run to finish and returns its reply. Also used for a turn
+    /// that a steer started because the previous one had just ended.
+    public func awaitReply(
+        threadId: String,
+        runId: String?,
+        readingAfter readStart: Int? = nil,
+        waitWindow: TimeInterval = 20,
+        onEvent: @Sendable (Event) async -> Void = { _ in }
+    ) async throws -> String? {
+        let start = Date()
         while true {
             try Task.checkCancellation()
-            let waited = try await client.wait(threadId: sent.threadId, runId: runId, timeout: waitWindow)
-            if waited.timedOut != true {
-                // A steer that landed just as this turn ended starts another turn;
-                // the answer the user is waiting for comes from that one.
-                if let active = await activeRun(threadId: sent.threadId), active != runId {
-                    runId = active
-                    continue
-                }
-                break
-            }
+            let waited = try await client.wait(threadId: threadId, runId: runId, timeout: waitWindow)
+            if waited.timedOut != true { break }
             if waited.status == "waiting" {
                 await onEvent(.needsAttention)
                 return nil
@@ -156,34 +159,41 @@ public actor Copilot {
             await onEvent(.working(elapsed: Date().timeIntervalSince(start)))
         }
 
-        let reply = try await latestReply(threadId: sent.threadId, runId: runId)
+        let reply = try await latestReply(threadId: threadId, runId: runId, after: readStart)
         await onEvent(.finished(reply: reply))
         return reply
     }
 
     /// Adds to the request the Copilot is working on: a running turn takes it as
-    /// a mid-turn update, like interrupting a person mid-sentence. If the turn has
-    /// just ended it starts a new one, which a pending `ask` follows.
+    /// a mid-turn update (`delivery` "steered"), like interrupting a person
+    /// mid-sentence. If the turn has just ended it starts a new one instead; the
+    /// caller follows that run with `awaitReply`.
     @discardableResult
-    public func steer(_ text: String, source: CopilotPrompts.Source, attachments: [OutgoingAttachment] = []) async throws -> ThreadSendResult {
-        try await send(text, source: source, attachments: attachments)
+    public func steer(
+        _ text: String,
+        source: CopilotPrompts.Source,
+        attachments: [OutgoingAttachment] = [],
+        requestID: String = UUID().uuidString
+    ) async throws -> ThreadSendResult {
+        try await send(text, source: source, attachments: attachments, requestID: requestID)
     }
 
-    /// Stops the Copilot's running turn ("cancel that").
-    public func interrupt() async throws {
-        guard let threadId = store.copilotThreadID else { return }
+    /// Stops the Copilot's running turn ("cancel that"). False when there's no
+    /// Copilot thread yet, so nothing could be stopped.
+    @discardableResult
+    public func interrupt() async throws -> Bool {
+        guard let threadId = store.copilotThreadID else { return false }
         try await client.interrupt(threadId: threadId)
-    }
-
-    private func activeRun(threadId: String) async -> String? {
-        try? await client.read(threadId: threadId, limit: 1, maxCharsPerItem: 1).thread.activeRunId
+        return true
     }
 
     /// The last assistant message of a run (or of the thread when `runId` is nil).
-    public func latestReply(threadId: String, runId: String?) async throws -> String? {
+    /// `start` reads from an earlier position than the shared cursor: for a run
+    /// whose reply another lookup may already have read past.
+    public func latestReply(threadId: String, runId: String?, after start: Int? = nil) async throws -> String? {
         // The `messages` view pages forward from the start and the Copilot thread
         // only grows, so resume from where the last read ended.
-        var after = store.readCursor(threadId: threadId)
+        var after = start ?? store.readCursor(threadId: threadId)
         var latest: String?
         repeat {
             let page = try await client.read(threadId: threadId, limit: 50, maxCharsPerItem: 4000, afterPosition: after)
@@ -199,23 +209,26 @@ public actor Copilot {
     // MARK: - Outbox
 
     /// Retries requests that failed to send (phone offline when Siri fired).
+    /// Returns what happened to each item it settled, by id: true if sent,
+    /// false if the server rejected it. Items still waiting aren't listed.
     @discardableResult
-    public func flushOutbox() async -> Int {
-        var sent = 0
+    public func flushOutbox() async -> [String: Bool] {
+        var settled: [String: Bool] = [:]
         for item in store.outbox {
             do {
                 try await send(item.text, source: item.source, requestID: item.id)
                 store.removeFromOutbox(id: item.id)
-                sent += 1
+                settled[item.id] = true
             } catch let error as T3Error {
                 if case .unauthorized = error { break }
                 if case .transport = error { break }
                 // The server rejected this one outright; don't retry it forever.
                 store.removeFromOutbox(id: item.id)
+                settled[item.id] = false
             } catch {
                 break
             }
         }
-        return sent
+        return settled
     }
 }
