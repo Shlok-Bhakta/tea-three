@@ -35,6 +35,7 @@ struct PhotoButton: View {
     @State private var showCamera = false
     @State private var showLibrary = false
     @State private var picked: [PhotosPickerItem] = []
+    var diameter: CGFloat = 36
 
     var body: some View {
         Menu {
@@ -43,11 +44,11 @@ struct PhotoButton: View {
             }
             Button("Choose from Library", systemImage: "photo.on.rectangle") { showLibrary = true }
         } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 16, weight: .semibold))
+            Image(systemName: "camera")
+                .font(.system(size: diameter * 0.33, weight: .medium))
                 .foregroundStyle(theme.foreground)
-                .frame(width: 36, height: 36)
-                .background(theme.foreground.opacity(0.07), in: Circle())
+                .frame(width: diameter, height: diameter)
+                .glassEffect(.regular.interactive(), in: Circle())
         }
         .accessibilityLabel("Attach a photo")
         .photosPicker(isPresented: $showLibrary, selection: $picked, maxSelectionCount: 4, matching: .images)

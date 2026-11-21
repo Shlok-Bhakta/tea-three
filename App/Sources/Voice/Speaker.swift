@@ -18,7 +18,7 @@ final class Speaker: NSObject {
     private lazy var natural = NaturalVoicePlayer()
 
     /// The selected voice's identifier: a natural voice ("pocket:george") or an
-    /// iPhone voice. Natural voices are the default when they're embedded.
+    /// iPhone voice. Natural voices are the default once downloaded.
     static var selectedIdentifier: String {
         if let id = UserDefaults.standard.string(forKey: voiceKey), !id.isEmpty,
            NaturalVoice.voice(forIdentifier: id) == nil || NaturalVoice.isAvailable

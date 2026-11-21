@@ -38,7 +38,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             makeState(.idle, titles: ["Tap to talk", "Ready"], image: "mic.circle", buttons: [startButton()]),
             makeState(.listening, titles: ["Listening…"], image: "waveform", repeats: true, buttons: [stopButton()]),
             makeState(.thinking, titles: ["Working on it…", "Thinking…"], image: "ellipsis.circle", repeats: true, buttons: [stopButton()]),
-            makeState(.speaking, titles: ["Copilot"], image: "speaker.wave.2", repeats: true, buttons: [stopButton()]),
+            makeState(.speaking, titles: ["Clanker"], image: "speaker.wave.2", repeats: true, buttons: [stopButton()]),
         ])
         self.template = template
         interfaceController.setRootTemplate(template, animated: false, completion: nil)

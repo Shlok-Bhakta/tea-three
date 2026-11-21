@@ -1,9 +1,10 @@
 import SwiftUI
 import TeaThreeKit
 
-/// One screen: the latest exchange and a T3-style glass composer. The
-/// waveform button in the composer starts hands-free talk; the title shows
-/// whether the server can be reached.
+/// Voice first: the latest exchange up top, one big talk button below with
+/// photos and typing to either side. Typing stays tucked away until asked for.
+/// Hidden extra: press and hold anywhere in the space above the controls to
+/// talk for as long as you hold, then let go to send.
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.theme) private var theme
@@ -11,8 +12,11 @@ struct HomeView: View {
     @State private var showModels = false
     @State private var showVoices = false
     @State private var showConnection = false
+    @State private var showKeyboard = false
     @State private var typed = ""
     @FocusState private var typing: Bool
+    /// True while a press-and-hold is down; resets even when the system cancels the gesture.
+    @GestureState private var holdPressed = false
 
     private var voice: VoiceSession { model.voice }
     private var hasModel: Bool { model.settings.copilotModel != nil }
@@ -26,8 +30,12 @@ struct HomeView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .contentShape(Rectangle())
                         .onTapGesture { typing = false }
+                        .simultaneousGesture(holdToTalk)
+                        .onChange(of: holdPressed) { _, pressed in
+                            if !pressed { voice.endHold() }
+                        }
                     notices
-                    composer
+                    controls
                 }
             }
             .toolbar {
@@ -53,13 +61,14 @@ struct HomeView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             #if DEBUG
-            // `SIMCTL_CHILD_TEA_THREE_OPEN=models|settings|voice|connection` for screenshots.
+            // `SIMCTL_CHILD_TEA_THREE_OPEN=models|settings|voice|connection|keyboard` for screenshots.
             .task {
                 switch ProcessInfo.processInfo.environment["TEA_THREE_OPEN"] {
                 case "models": showModels = true
                 case "settings": showSettings = true
                 case "voice": showVoices = true
                 case "connection": showConnection = true
+                case "keyboard": showKeyboard = true
                 default: break
                 }
                 if let text = ProcessInfo.processInfo.environment["TEA_THREE_SAY"] {
@@ -78,6 +87,23 @@ struct HomeView: View {
         }
     }
 
+    /// Long press, then hold: listens with no end-of-turn cutoff until release.
+    /// Works with hands-free on or off. Deliberately undocumented in the UI.
+    private var holdToTalk: some Gesture {
+        LongPressGesture(minimumDuration: 0.35)
+            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .local))
+            .updating($holdPressed) { value, pressed, _ in
+                if case .second(true, _) = value { pressed = true }
+            }
+            .onChanged { value in
+                if case .second(true, _) = value, hasModel, !voice.isHolding {
+                    typing = false
+                    voice.beginHold()
+                }
+            }
+            .onEnded { _ in voice.endHold() }
+    }
+
     // MARK: Latest exchange
 
     /// Only the latest exchange (your request, any steers, the reply). The full
@@ -92,8 +118,8 @@ struct HomeView: View {
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(theme.foreground)
                 Text(hasModel
-                     ? "Type below, or tap \(Image(systemName: "waveform")) to talk hands-free. Everything goes to your “\(model.settings.threadTitle)” thread in T3 Code."
-                     : "Tap the model button below to choose which model your Copilot runs on.")
+                     ? "Tap the mic and just talk. Everything goes to your “\(model.settings.threadTitle)” thread in T3 Code."
+                     : "Tap the model under the mic to choose which model your Clanker runs on.")
                     .font(.subheadline)
                     .foregroundStyle(theme.foregroundSecondary)
                     .multilineTextAlignment(.center)
@@ -163,57 +189,81 @@ struct HomeView: View {
         .animation(.default, value: model.connection)
     }
 
-    // MARK: Composer
+    // MARK: Controls
 
     private var canSend: Bool { hasModel && (!typed.trimmingCharacters(in: .whitespaces).isEmpty || !model.pendingPhotos.isEmpty) }
 
-    private var composer: some View {
-        VStack(alignment: .leading, spacing: 10) {
+    private var controls: some View {
+        VStack(spacing: 14) {
             PendingPhotosStrip()
-            if voice.isRunning {
-                LiveLine(voice: voice)
+                .padding(.horizontal, 20)
+            if showKeyboard {
+                textBar
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            // Stays while talking hands-free, so a steer can be typed too.
-            TextField(voice.isWorking ? "Steer the Copilot…" : "Message your Copilot", text: $typed, axis: .vertical)
+            StatusLine(voice: voice, hasModel: hasModel)
+                .padding(.horizontal, 24)
+            HStack {
+                PhotoButton(diameter: 54)
+                    .disabled(!hasModel)
+                    .opacity(hasModel ? 1 : 0.5)
+                Spacer()
+                TalkButton(voice: voice, enabled: hasModel) {
+                    typing = false
+                    voice.toggle()
+                }
+                Spacer()
+                keyboardButton
+            }
+            .padding(.horizontal, 36)
+            modelPill
+        }
+        .padding(.bottom, 8)
+        .animation(.snappy, value: showKeyboard)
+    }
+
+    private var keyboardButton: some View {
+        Button {
+            showKeyboard.toggle()
+            typing = showKeyboard
+        } label: {
+            Image(systemName: showKeyboard ? "keyboard.chevron.compact.down" : "keyboard")
+                .font(.system(size: 19, weight: .medium))
+                .foregroundStyle(theme.foreground)
+                .frame(width: 54, height: 54)
+                .glassEffect(.regular.interactive(), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!hasModel)
+        .opacity(hasModel ? 1 : 0.5)
+        .accessibilityLabel(showKeyboard ? "Hide keyboard" : "Type instead")
+    }
+
+    /// Only shown on request: a slim field with a send arrow.
+    private var textBar: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            TextField(voice.isWorking ? "Steer the Clanker…" : "Type a message", text: $typed, axis: .vertical)
                 .lineLimit(1...5)
                 .focused($typing)
                 .foregroundStyle(theme.foreground)
-                .padding(.horizontal, 4)
+                .padding(.vertical, 8)
                 .onSubmit(sendTyped)
-            HStack(spacing: 8) {
-                PhotoButton()
-                    .disabled(!hasModel)
-                modelPill
-                Spacer(minLength: 0)
-                sendButton
+            Button(action: sendTyped) {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(theme.primaryForeground)
+                    .frame(width: 32, height: 32)
+                    .background(theme.primary, in: Circle())
             }
+            .disabled(!canSend)
+            .opacity(canSend ? 1 : 0.4)
+            .accessibilityLabel("Send")
         }
-        .padding(14)
-        .glassEffect(.regular.tint(theme.composerSurface.opacity(0.35)), in: RoundedRectangle(cornerRadius: 27, style: .continuous))
-        .padding(.horizontal, 12)
-        .padding(.bottom, 6)
-    }
-
-    /// Arrow when there's something typed; otherwise starts or stops hands-free talk.
-    private var sendButton: some View {
-        let icon = canSend ? "arrow.up" : (voice.isRunning ? "stop.fill" : "waveform")
-        return Button {
-            if canSend { sendTyped() } else { typing = false; voice.toggle() }
-        } label: {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(theme.primaryForeground)
-                .contentTransition(.symbolEffect(.replace))
-                .frame(width: 36, height: 36)
-                .background(theme.primary, in: Circle())
-                .background {
-                    if voice.phase == .listening { PulseRing(color: theme.primary) }
-                }
-        }
-        .disabled(!hasModel)
-        .opacity(hasModel ? 1 : 0.4)
-        .sensoryFeedback(.impact, trigger: voice.isRunning)
-        .accessibilityLabel(canSend ? "Send" : (voice.isRunning ? "Stop listening" : "Talk hands-free"))
+        .padding(.leading, 16)
+        .padding(.trailing, 6)
+        .padding(.vertical, 4)
+        .glassEffect(.regular.tint(theme.composerSurface.opacity(0.35)), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .padding(.horizontal, 16)
     }
 
     private var modelPill: some View {
@@ -224,7 +274,7 @@ struct HomeView: View {
                 {
                     ProviderBadge(provider: provider)
                     Text(ModelOptionText.summary(selection, in: model.capabilities))
-                        .foregroundStyle(theme.foreground)
+                        .foregroundStyle(theme.foregroundSecondary)
                 } else {
                     Image(systemName: "cpu").foregroundStyle(theme.primaryText)
                     Text(model.capabilities != nil ? "Choose model" : model.connection?.isConnected == false ? "Models load once connected" : "Loading models…")
@@ -234,12 +284,12 @@ struct HomeView: View {
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(theme.foregroundSecondary)
             }
-            .font(.subheadline.weight(.medium))
+            .font(.footnote.weight(.medium))
             .lineLimit(1)
-            .padding(.horizontal, 10)
-            .frame(height: 36)
-            .background(theme.foreground.opacity(0.07), in: Capsule())
+            .padding(.horizontal, 12)
+            .frame(height: 30)
         }
+        .buttonStyle(.plain)
         .disabled(model.capabilities == nil)
         .accessibilityLabel("Model and reasoning settings")
     }
@@ -249,43 +299,63 @@ struct HomeView: View {
         let text = typed
         typed = ""
         typing = false
+        showKeyboard = false
         Task { await voice.sendTyped(text) }
     }
 }
 
-/// Takes the text field's place while talking hands-free: what's being heard,
-/// or what the Copilot is doing.
-private struct LiveLine: View {
+/// The big one: starts hands-free talk, and stops it. Pulses while listening.
+private struct TalkButton: View {
     @Environment(\.theme) private var theme
     let voice: VoiceSession
+    let enabled: Bool
+    let action: () -> Void
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: icon)
-                .foregroundStyle(theme.primaryText)
-                .symbolEffect(.variableColor.iterative, isActive: voice.phase == .listening || voice.phase == .thinking)
-            Text(voice.partial.isEmpty ? (voice.isWorking && voice.phase == .listening ? "Working on it. Talk to steer, or say “cancel that”." : status) : voice.partial)
-                .foregroundStyle(voice.partial.isEmpty ? theme.foregroundSecondary : theme.foreground)
-                .lineLimit(1...5)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        Button(action: action) {
+            Image(systemName: voice.isRunning ? "stop.fill" : "mic.fill")
+                .font(.system(size: 32, weight: .semibold))
+                .foregroundStyle(theme.primaryForeground)
+                .contentTransition(.symbolEffect(.replace))
+                .frame(width: 88, height: 88)
+                .glassEffect(.regular.tint(theme.primary.opacity(voice.isRunning ? 0.95 : 0.8)).interactive(), in: Circle())
+                .background {
+                    if voice.phase == .listening || voice.isHolding { PulseRing(color: theme.primary) }
+                }
         }
-        .padding(.horizontal, 4)
-        .animation(.default, value: voice.phase)
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.45)
+        .sensoryFeedback(.impact, trigger: voice.isRunning)
+        .accessibilityLabel(voice.isRunning ? "Stop talking" : "Talk")
+    }
+}
+
+/// One line above the controls saying what's happening, plus what's being heard.
+private struct StatusLine: View {
+    @Environment(\.theme) private var theme
+    let voice: VoiceSession
+    let hasModel: Bool
+
+    var body: some View {
+        Text(text)
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(theme.foregroundSecondary)
+            .multilineTextAlignment(.center)
+            .lineLimit(2)
+            .frame(maxWidth: .infinity)
+            .contentTransition(.opacity)
+            .animation(.default, value: text)
     }
 
-    private var icon: String {
+    private var text: String {
+        if voice.isHolding { return "Listening until you let go…" }
         switch voice.phase {
-        case .idle, .listening: "waveform"
-        case .thinking: "ellipsis"
-        case .speaking: "speaker.wave.2.fill"
-        }
-    }
-
-    private var status: String {
-        switch voice.phase {
-        case .idle, .listening: "Listening… just talk"
-        case .thinking: "Working on it…"
-        case .speaking: "Speaking…"
+        case .listening:
+            return voice.isWorking ? "Working on it. Talk to steer, or say “cancel that”." : "Listening… just talk"
+        case .thinking: return "Working on it…"
+        case .speaking: return "Speaking…"
+        case .idle: return hasModel ? "Tap to talk" : "Choose a model first"
         }
     }
 }

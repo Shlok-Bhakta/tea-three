@@ -7,8 +7,8 @@ import TeaThreeKit
 struct SendToT3Intent: AppIntent {
     static let title: LocalizedStringResource = "Send to T3 Code"
     static let description = IntentDescription(
-        "Sends anything the user says (food or health logs, notes, tasks, questions, coding requests) to their T3 Code Copilot, an AI agent on their own server that has their data and tools and routes it to the right place. Tea Three keeps no data of its own to search, so always hand the request over instead of answering it.",
-        categoryName: "Copilot"
+        "Sends anything the user says (food or health logs, notes, tasks, questions, coding requests) to their T3 Code Clanker, an AI agent on their own server that has their data and tools and routes it to the right place. Tea Three keeps no data of its own to search, so always hand the request over instead of answering it.",
+        categoryName: "Clanker"
     )
     static let supportedModes: IntentModes = .background
 
@@ -35,8 +35,8 @@ struct SendToT3Intent: AppIntent {
 struct TalkToT3Intent: AppIntent {
     static let title: LocalizedStringResource = "Talk to T3 Code"
     static let description = IntentDescription(
-        "Opens Tea Three listening, for a back-and-forth with your T3 Code Copilot. Say “goodbye” to stop.",
-        categoryName: "Copilot"
+        "Opens Tea Three listening, for a back-and-forth with your T3 Code Clanker. Say “goodbye” to stop.",
+        categoryName: "Clanker"
     )
     static let supportedModes: IntentModes = .foreground(.immediate)
 
@@ -51,8 +51,8 @@ struct TalkToT3Intent: AppIntent {
 struct AskT3Intent: AppIntent {
     static let title: LocalizedStringResource = "Ask T3 Code"
     static let description = IntentDescription(
-        "Asks the user's T3 Code Copilot (an AI agent on their own server with their health, food, notes, finances, and code) and reads back its answer. Tea Three keeps no data of its own, so hand any question about that data to this action instead of answering it.",
-        categoryName: "Copilot"
+        "Asks the user's T3 Code Clanker (an AI agent on their own server with their health, food, notes, finances, and code) and reads back its answer. Tea Three keeps no data of its own, so hand any question about that data to this action instead of answering it.",
+        categoryName: "Clanker"
     )
     static let supportedModes: IntentModes = .background
 
@@ -76,7 +76,7 @@ struct AskT3Intent: AppIntent {
             group.cancelAll()
             return first
         }
-        let text = reply ?? "Still working on it. It'll be in the Copilot thread."
+        let text = reply ?? "Still working on it. It'll be in the Clanker thread."
         return .result(value: text, dialog: IntentDialog(stringLiteral: text))
     }
 }

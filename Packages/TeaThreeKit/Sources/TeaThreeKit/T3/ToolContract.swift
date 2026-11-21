@@ -48,6 +48,7 @@ public enum ToolContract {
         Requirement("t3_thread_list", arguments: ["allProjects", "limit", "titleContains", "snoozed"], critical: false),
         Requirement("t3_thread_configure", arguments: ["threadId", "modelSelection"], critical: false),
         Requirement("t3_thread_interrupt", arguments: ["threadId"], critical: false),
+        Requirement("t3_thread_update", arguments: ["threadId", "action", "title"], enumValues: ["action": ["rename"]], critical: false),
         Requirement("t3_project_list", arguments: ["limit"], critical: false),
         Requirement("orchestrator_capabilities", arguments: [], critical: false),
         // Photos. Losing these only disables the camera button.

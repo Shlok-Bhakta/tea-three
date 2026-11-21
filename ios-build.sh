@@ -4,7 +4,6 @@
 # If a T3 credential exists at $TEA_THREE_BOOTSTRAP (default
 # ~/.config/tea-three/bootstrap.json, made with `tea-three pair`), it's copied
 # into the app so the build arrives already paired. It never enters the repo.
-# The natural voice model is embedded the same way (scripts/fetch-voices.sh).
 set -euo pipefail
 
 : "${GALA_BUILD_DIR:?Gala build directory is required}"
@@ -32,14 +31,8 @@ if [[ -f "$BOOTSTRAP" ]]; then
   echo "Bundled T3 credential from $BOOTSTRAP"
 fi
 
-# Natural voices (Kyutai Pocket TTS, ~180 MB), downloaded once into a cache
-# and verified. TEA_THREE_SKIP_VOICES=1 builds with iPhone voices only.
-if [[ "${TEA_THREE_SKIP_VOICES:-}" != "1" ]]; then
-  VOICES="$(scripts/fetch-voices.sh)"
-  mkdir -p "$STAGE/Payload/TeaThree.app/Pocket"
-  cp -R "$VOICES/FlowLM.mlmodelc" "$VOICES/Mimi.mlmodelc" "$VOICES/voices" "$STAGE/Payload/TeaThree.app/Pocket/"
-  echo "Embedded natural voices from $VOICES"
-fi
+# Natural voices aren't embedded: the app downloads them once (Settings › Voice),
+# so updates stay small.
 
 IPA="$GALA_ARTIFACT_DIR/TeaThree.ipa"
 (cd "$STAGE" && zip -qry "$IPA" Payload)

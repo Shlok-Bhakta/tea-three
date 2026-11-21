@@ -1,9 +1,9 @@
 # Third-party notices
 
 Tea Three's natural voices run entirely on the phone. The model and voices are
-not in this repository: `scripts/fetch-voices.sh` downloads them at build time
-from pinned URLs, verifies each against `scripts/pocket-tts.sha256`, and
-`ios-build.sh` embeds them in the app.
+not in this repository or the app bundle: the app downloads them on request
+(`App/Sources/Voice/VoiceDownload.swift`) from pinned URLs, verifies each by SHA-256, and
+keeps them on the device.
 
 | Component | Use | License |
 | --- | --- | --- |

@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UIKit
 import TeaThreeKit
 
 /// The hands-free conversation loop: listen → send to the Copilot → speak the
@@ -45,6 +46,8 @@ final class VoiceSession {
     private(set) var isRunning = false
     /// The Copilot is working on a request; anything sent now steers it.
     private(set) var isWorking = false
+    /// Press-and-hold to talk is in progress.
+    private(set) var isHolding = false
 
     /// CarPlay listens here to switch its voice-control states.
     @ObservationIgnored var onPhaseChange: ((Phase) -> Void)?
@@ -53,6 +56,10 @@ final class VoiceSession {
     @ObservationIgnored private let listener = SpeechListener()
     @ObservationIgnored private let speaker = Speaker()
     @ObservationIgnored private var loop: Task<Void, Never>?
+    /// A single press-and-hold turn while hands-free is off.
+    @ObservationIgnored private var holdTurn: Task<Void, Never>?
+    /// A press that came in while `holdTurn` was still finishing the previous one.
+    @ObservationIgnored private var pendingHold = false
     @ObservationIgnored private var work: Task<Void, Never>?
     /// The message that started the current work, for its delivery label.
     @ObservationIgnored private var workTurn: UUID?
@@ -85,7 +92,7 @@ final class VoiceSession {
     }
 
     func start() {
-        guard loop == nil else { return }
+        guard loop == nil, holdTurn == nil else { return }
         NaturalVoiceEngine.shared.prewarm()
         isRunning = true
         loop = Task { await run() }
@@ -101,6 +108,80 @@ final class VoiceSession {
         partial = ""
         phase = isWorking ? .thinking : .idle
         AudioSession.deactivate()
+    }
+
+    // MARK: Press and hold
+
+    /// Listens with no end-of-turn cutoff until `endHold()`. With hands-free on,
+    /// it holds the current turn open (and cuts off a reply being read out);
+    /// with it off, it's a one-off turn.
+    func beginHold() {
+        guard !isHolding else { return }
+        isHolding = true
+        listener.hold()
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        // Talking over a reply cuts it off; the rest stays on screen.
+        if phase == .speaking {
+            unspoken = []
+            speaker.stop()
+        }
+        if isRunning { return }
+        guard holdTurn == nil else {
+            pendingHold = true
+            return
+        }
+        holdTurn = Task { await holdOnce() }
+    }
+
+    func endHold() {
+        guard isHolding else { return }
+        isHolding = false
+        listener.releaseHold()
+    }
+
+    private func holdOnce() async {
+        let heard = await captureHeld()
+        // The mic is closed: a new hold can start while this one is being sent.
+        holdTurn = nil
+        partial = ""
+        // Pressed again while this turn was still finalizing: listen for that one now.
+        // Only for a new press, so a mic that fails to start isn't retried in a loop.
+        if pendingHold, isHolding, !isRunning {
+            holdTurn = Task { await holdOnce() }
+        }
+        pendingHold = false
+        if !isRunning, holdTurn == nil {
+            if phase == .listening { phase = isWorking ? .thinking : .idle }
+            if heard.isEmpty, !isWorking { AudioSession.deactivate() }
+        }
+        guard !heard.isEmpty else { return }
+        Earcon.heard()
+        let settings = service.store.settings
+        await submit(heard, source: .voice, speak: settings.speakReplies, attachments: takeAttachments())
+    }
+
+    /// One held turn of listening; "" if nothing was said or the mic couldn't start.
+    private func captureHeld() async -> String {
+        guard await SpeechListener.requestAuthorization() else {
+            note(SpeechListener.Failure.notAuthorized.localizedDescription)
+            return ""
+        }
+        do {
+            try AudioSession.activate()
+        } catch {
+            note("Couldn't start audio: \(error.localizedDescription)")
+            return ""
+        }
+        phase = .listening
+        Earcon.listening()
+        do {
+            return try await listener.listen(detector: service.store.settings.turnDetector) { text in
+                Task { @MainActor in self.partial = text }
+            }
+        } catch {
+            note(error.localizedDescription)
+            return ""
+        }
     }
 
     /// Typed messages use the same Copilot, without the mic. While it's
@@ -170,7 +251,8 @@ final class VoiceSession {
 
         let settings = service.store.settings
         while !Task.isCancelled {
-            while !unspoken.isEmpty, !Task.isCancelled {
+            // Not during a hold: the mic opens first, replies wait.
+            while !unspoken.isEmpty, !Task.isCancelled, !isHolding {
                 await say(unspoken.removeFirst())
             }
             phase = .listening
@@ -281,6 +363,8 @@ final class VoiceSession {
             work = nil
             isWorking = false
             if !isRunning, phase == .thinking { phase = .idle }
+            // A press-and-hold turn left the mic session up for the reply.
+            if !isRunning, holdTurn == nil { AudioSession.deactivate() }
         }
     }
 
@@ -291,7 +375,8 @@ final class VoiceSession {
             // Read it out between turns, not over someone mid-sentence.
             unspoken.append(reply.text)
             listener.yieldIfSilent()
-        } else {
+        } else if holdTurn == nil {
+            // Not while a press-and-hold has the mic open; it's on screen either way.
             await say(reply.text)
         }
     }

@@ -3,6 +3,8 @@ import SwiftUI
 
 /// Picks the voice replies are read in. Tapping a voice previews it.
 struct VoicePicker: View {
+    /// From the observable download, so the list appears the moment it finishes.
+    private var naturalReady: Bool { VoiceDownload.shared.state == .ready }
     @Environment(\.theme) private var theme
     @AppStorage(Speaker.voiceKey) private var voiceID = ""
     @AppStorage(Speaker.rateKey) private var rate = 1.0
@@ -15,7 +17,14 @@ struct VoicePicker: View {
 
     var body: some View {
         List {
-            if NaturalVoice.isAvailable {
+            if !naturalReady {
+                Section {
+                    VoiceDownloadRow()
+                } footer: {
+                    Text("Downloaded once and kept on your iPhone, so app updates stay small.")
+                }
+            }
+            if naturalReady {
                 Section {
                     ForEach(NaturalVoice.voices) { voice in
                         let id = NaturalVoice.identifierPrefix + voice.id
@@ -33,7 +42,7 @@ struct VoicePicker: View {
                 }
             }
 
-            if !NaturalVoice.isAvailable && !hasGoodVoice {
+            if !naturalReady && !hasGoodVoice {
                 Section {
                     Label {
                         Text("Only basic voices are installed. Add a Premium one (Ava, Zoe, Evan, Nathan…) for free: open iOS Settings, search for “Voices”, pick English, and download one. It shows up here.")
@@ -136,5 +145,53 @@ private struct VoiceRow: View {
                 Image(systemName: "checkmark").fontWeight(.semibold).foregroundStyle(theme.primaryText)
             }
         }
+    }
+}
+
+/// The one-time natural voice download: a button, then progress, then done.
+struct VoiceDownloadRow: View {
+    @Environment(\.theme) private var theme
+    private var download: VoiceDownload { .shared }
+
+    var body: some View {
+        switch download.state {
+        case .ready:
+            LabeledContent("Natural voices") {
+                Menu("Downloaded") {
+                    Button("Remove (\(size))", role: .destructive) { download.remove() }
+                }
+            }
+        case .downloading(let fraction):
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Downloading natural voices…")
+                    Spacer()
+                    Button("Cancel") { download.cancel() }
+                        .buttonStyle(.borderless)
+                }
+                ProgressView(value: fraction)
+                    .tint(theme.primary)
+                Text("\(Int(fraction * 100))% of \(size). Keep Tea Three open.")
+                    .font(.caption)
+                    .foregroundStyle(theme.foregroundSecondary)
+            }
+        case .missing, .failed:
+            VStack(alignment: .leading, spacing: 4) {
+                Button {
+                    download.start()
+                } label: {
+                    Label("Download natural voices (\(size))", systemImage: "arrow.down.circle")
+                }
+                if case .failed(let message) = download.state {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            }
+        }
+    }
+
+    private var size: String {
+        ByteCountFormatter.string(fromByteCount: VoiceDownload.totalBytes, countStyle: .file)
     }
 }

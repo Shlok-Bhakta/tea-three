@@ -3,8 +3,8 @@ import CoreML
 import NaturalLanguage
 
 /// The natural voices: Kyutai's Pocket TTS running on device with Core ML,
-/// borrowed from MB Books. `ios-build.sh` embeds the model and voices in the
-/// app under `Pocket/`; without them Tea Three falls back to iPhone voices.
+/// borrowed from MB Books. The model and voices are downloaded once in the app
+/// (`VoiceDownload`); until then Tea Three uses iPhone voices.
 nonisolated enum NaturalVoice {
     struct Voice: Identifiable, Hashable, Sendable {
         let id: String
@@ -34,7 +34,7 @@ nonisolated enum NaturalVoice {
     ]
 
     static let identifierPrefix = "pocket:"
-    static var directory: URL? { Bundle.main.url(forResource: "Pocket", withExtension: nil) }
+    static var directory: URL? { VoiceDownload.isInstalled ? VoiceDownload.directory : nil }
     static var isAvailable: Bool { directory != nil }
 
     static func voice(forIdentifier identifier: String) -> Voice? {

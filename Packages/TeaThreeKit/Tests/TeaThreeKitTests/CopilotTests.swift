@@ -30,6 +30,31 @@ struct CopilotTests {
         #expect(server.calls(to: "t3_thread_launch").isEmpty)
     }
 
+    @Test("an old \"Tea Three Copilot\" thread is kept and renamed to the Clanker")
+    func renamesLegacyThread() async throws {
+        let server = FakeT3()
+        let fixture = readFixture
+        server.toolHandler = { name, _ in
+            switch name {
+            case "t3_thread_read":
+                guard case .object(var root) = fixture, case .object(var thread)? = root["thread"] else { return nil }
+                thread["title"] = "Tea Three Copilot"
+                root["thread"] = .object(thread)
+                return .object(root)
+            case "t3_thread_update": return ["threadId": "x", "action": "rename", "title": "Tea Three Clanker"]
+            default: return nil
+            }
+        }
+        let store = SharedStore.ephemeral()
+        store.copilotThreadID = copilotThreadId
+        let copilot = Copilot(client: .fake(server), settings: store.settings, store: store)
+        #expect(try await copilot.ensureThread() == copilotThreadId)
+        let rename = try #require(server.calls(to: "t3_thread_update").first?.arguments)
+        #expect(rename["action"] == "rename")
+        #expect(rename["title"] == "Tea Three Clanker")
+        #expect(server.calls(to: "t3_thread_launch").isEmpty)
+    }
+
     @Test("first use with no thread: launches with the briefing, then pins it")
     func launchesAndPins() async throws {
         let server = FakeT3()
@@ -43,7 +68,7 @@ struct CopilotTests {
 
         let id = try await copilot.ensureThread()
         let launch = try #require(server.calls(to: "t3_thread_launch").first?.arguments)
-        #expect(launch["title"] == "Tea Three Copilot")
+        #expect(launch["title"] == "Tea Three Clanker")
         // No project chosen: the broadest project on the server, never a separate scratch folder.
         #expect(launch["projectId"] == "f5d40789-8ddf-4d0b-8748-70c4a1d8a009")
         #expect(launch["scratch"] == nil)

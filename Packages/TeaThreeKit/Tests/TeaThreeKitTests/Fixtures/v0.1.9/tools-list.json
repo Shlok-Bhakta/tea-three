@@ -615,6 +615,37 @@
     "name" : "t3_thread_send_attachments"
   },
   {
+    "description" : "Rename a thread (`action:'rename'` with `title`) or regenerate its title. Omit `threadId` for this thread. Workspace and branch cannot change here.",
+    "inputSchema" : {
+      "properties" : {
+        "action" : {
+          "enum" : [
+            "rename",
+            "regenerate_title"
+          ],
+          "type" : "string"
+        },
+        "clientRequestId" : {
+          "type" : "string"
+        },
+        "environmentId" : {
+          "type" : "string"
+        },
+        "threadId" : {
+          "type" : "string"
+        },
+        "title" : {
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "action"
+      ],
+      "type" : "object"
+    },
+    "name" : "t3_thread_update"
+  },
+  {
     "description" : "Wait for a thread's run to finish. No `runId`: latest. Idle: at once. On timeout, with `next` end your turn; without, call again.",
     "inputSchema" : {
       "properties" : {

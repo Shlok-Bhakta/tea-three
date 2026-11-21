@@ -1,6 +1,6 @@
 import Foundation
 
-/// The single pinned "Copilot" thread every voice request goes to.
+/// The single pinned "Clanker" thread every voice request goes to.
 public actor Copilot {
     public enum Event: Sendable, Equatable {
         case sent(threadId: String, runId: String?)
@@ -25,11 +25,13 @@ public actor Copilot {
 
     /// Returns the Copilot thread id, creating and pinning the thread on first use.
     public func ensureThread() async throws -> String {
-        if let cached = store.copilotThreadID, await isUsable(cached) {
+        if let cached = store.copilotThreadID, let title = await usableTitle(cached) {
+            await renameIfNeeded(cached, from: title)
             return cached
         }
-        if let found = try await findByTitle() {
+        if let (found, title) = try await findByTitle() {
             store.copilotThreadID = found
+            await renameIfNeeded(found, from: title)
             return found
         }
         // The user picks the model in the app; Tea Three never chooses one.
@@ -69,17 +71,28 @@ public actor Copilot {
             .min { ($0.workspaceRoot!.split(separator: "/").count, $0.workspaceRoot!) < ($1.workspaceRoot!.split(separator: "/").count, $1.workspaceRoot!) }
     }
 
-    private func isUsable(_ threadId: String) async -> Bool {
-        guard let read = try? await client.read(threadId: threadId, limit: 1, maxCharsPerItem: 1) else { return false }
-        return read.thread.archived != true
+    /// The thread's title, or nil if it's gone or archived.
+    private func usableTitle(_ threadId: String) async -> String? {
+        guard let read = try? await client.read(threadId: threadId, limit: 1, maxCharsPerItem: 1),
+              read.thread.archived != true else { return nil }
+        return read.thread.title
     }
 
-    private func findByTitle() async throws -> String? {
-        let matches = try await client.searchThreads(settings.threadTitle, limit: 10)
+    /// Keeps the thread's name in T3 Code in step with the setting (an old
+    /// "Tea Three Clanker" becomes "Tea Three Clanker"). Cosmetic: never fails a request.
+    private func renameIfNeeded(_ threadId: String, from title: String) async {
+        guard title != settings.threadTitle else { return }
+        try? await client.rename(threadId: threadId, to: settings.threadTitle)
+    }
+
+    private func findByTitle() async throws -> (String, String)? {
         // A Copilot left behind in another project isn't this one.
         let projectId = try await projectId()
-        for match in matches where match.title == settings.threadTitle && (projectId == nil || match.projectId == nil || match.projectId == projectId) {
-            if await isUsable(match.threadId) { return match.threadId }
+        for title in [settings.threadTitle] + CopilotSettings.legacyThreadTitles {
+            let matches = try await client.searchThreads(title, limit: 10)
+            for match in matches where match.title == title && (projectId == nil || match.projectId == nil || match.projectId == projectId) {
+                if let current = await usableTitle(match.threadId) { return (match.threadId, current) }
+            }
         }
         return nil
     }

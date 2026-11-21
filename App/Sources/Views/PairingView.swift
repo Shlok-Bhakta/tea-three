@@ -52,7 +52,7 @@ struct PairingView: View {
             }
 
             Section {
-                Picker("Copilot permissions", selection: $access) {
+                Picker("Clanker permissions", selection: $access) {
                     Text("Run without asking").tag(MCPOAuth.Access.auto)
                     Text("Ask for approvals").tag(MCPOAuth.Access.approvalRequired)
                 }

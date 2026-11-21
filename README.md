@@ -5,7 +5,7 @@
 **Talk to [T3 Code](https://t3.codes) from Siri, the Action button, and CarPlay.**
 
 Tea Three is a tiny native iOS app that turns your voice into messages for one
-pinned **Copilot** thread on your own T3 Code server. The Copilot is a normal T3
+pinned **Clanker** thread on your own T3 Code server. The Clanker is a normal T3
 agent with T3's built-in thread tools, so *it* decides where things go: it
 continues the right thread, starts a new one in the right project, checks on
 running work, and settles one-off threads when they're done.
@@ -25,7 +25,7 @@ state), so if T3 changes something and Tea Three breaks, your main app keeps wor
                  │  scoped to orchestration only)
                  ▼
  ┌──────────────── T3 Code server on your Mac ────────────────────────┐
- │  📌 "Tea Three Copilot" thread  ──t3_thread_search/send/launch──►  │
+ │  📌 "Tea Three Clanker" thread  ──t3_thread_search/send/launch──►  │
  │                                    your other threads & projects   │
  └────────────────────────────────────────────────────────────────────┘
 ```
@@ -34,20 +34,20 @@ state), so if T3 changes something and Tea Three breaks, your main app keeps wor
 
 | Where | How | What happens |
 |---|---|---|
-| Anywhere | **"Hey Siri, tell Tea Three"**, *stop*, Siri asks "What should I send?", then talk | Siri says **"Sent."** and you're done. The Copilot handles it. If the server can't be reached, it's saved and sent the next time the app runs. Say the phrase on its own: "Hey Siri, tell Tea Three I ate a burrito" in one breath goes to Siri's own model and never reaches Tea Three. |
-| Anywhere | **"Hey Siri, ask Tea Three"**, *stop*, then your question | Siri reads back the Copilot's answer (it waits up to about 25 s). |
+| Anywhere | **"Hey Siri, tell Tea Three"**, *stop*, Siri asks "What should I send?", then talk | Siri says **"Sent."** and you're done. The Clanker handles it. If the server can't be reached, it's saved and sent the next time the app runs. Say the phrase on its own: "Hey Siri, tell Tea Three I ate a burrito" in one breath goes to Siri's own model and never reaches Tea Three. |
+| Anywhere | **"Hey Siri, ask Tea Three"**, *stop*, then your question | Siri reads back the Clanker's answer (it waits up to about 25 s). |
 | Action button | Assign the **Talk to T3** shortcut | Opens straight into hands-free mode. Talk, hear the answer in Tea Three's voice (not Siri's), keep talking. Say "goodbye" to stop. |
 | CarPlay | Open Tea Three on the car screen | Same hands-free loop with CarPlay's voice template. Needs Apple's entitlement (see below). |
-| Shortcuts | **Ask T3 Code** action | Returns the Copilot's answer as text (≈25 s max) so you can chain it. |
-| In the app | Type or tap the mic | Same Copilot. Tap the camera to take or pick photos; they go with your next message, typed or spoken. |
+| Shortcuts | **Ask T3 Code** action | Returns the Clanker's answer as text (≈25 s max) so you can chain it. |
+| In the app | Type or tap the mic | Same Clanker. Tap the camera to take or pick photos; they go with your next message, typed or spoken. |
 
-The Copilot is told how each message arrived (Siri, so nobody's listening;
+The Clanker is told how each message arrived (Siri, so nobody's listening;
 voice, so keep it short and speakable; typed) and to never settle its own thread.
-The Copilot thread is a normal pinned thread in T3 Code, so you see it (and its
+The Clanker thread is a normal pinned thread in T3 Code, so you see it (and its
 history) in the regular T3 app. It lives in your broadest project (usually the home
 folder) unless you pick one in Settings. The app itself only shows the latest exchange.
 
-Add your own standing instructions in **Settings › Notes for the Copilot**, for example:
+Add your own standing instructions in **Settings › Notes for the Clanker**, for example:
 
 > Food logs go to the Health project with the food-log skill. Anything I say to "do later" gets snoozed until 9am tomorrow.
 
@@ -68,8 +68,8 @@ Add your own standing instructions in **Settings › Notes for the Copilot**, fo
    A paid account lasts a year and is needed for CarPlay.
 3. **Pair.** On the Mac, run `t3 pair` and scan the QR code in Tea Three (or paste the URL).
 4. **Pick a model** on the main screen. The list comes from your server, and Tea
-   Three never picks one for you. The Copilot uses it, and threads it starts inherit
-   it. Changing it switches the Copilot thread right away.
+   Three never picks one for you. The Clanker uses it, and threads it starts inherit
+   it. Changing it switches the Clanker thread right away.
 5. **Action button:** Settings › Action Button › Shortcut › Tea Three › *Talk to T3*.
 
 **Skip pairing on the phone (Gala builds).** `ios-build.sh` bakes a credential
@@ -118,7 +118,7 @@ T3 Code ships nightly, so Tea Three checks its assumptions instead of trusting t
   **breaking** problems (a tool, argument, or enum value is gone, or there's a new
   required argument) and **degraded** ones (a nice-to-have tool is gone).
 - **Recorded fixtures** (`Tests/TeaThreeKitTests/Fixtures/v0.1.9`): real responses
-  from T3 Code 0.1.9. The unit tests decode them and run the whole Copilot flow
+  from T3 Code 0.1.9. The unit tests decode them and run the whole Clanker flow
   against a fake server built from them.
 - **Live contract tests** (`Tests/LiveContractTests`): pair, check the contract,
   then launch → search → list → pin → read → wait → archive a thread. No model
@@ -175,7 +175,7 @@ See [docs/RESEARCH.md](docs/RESEARCH.md) for the investigation behind these choi
 ```
 App/                       iOS app (SwiftUI, App Intents, CarPlay scene)
 Packages/TeaThreeKit/      client library + `tea-three` CLI + tests
-  Sources/TeaThreeKit/     MCP client, OAuth pairing, T3 tools, Copilot, contract
+  Sources/TeaThreeKit/     MCP client, OAuth pairing, T3 tools, Clanker, contract
   Tests/                   fixture tests, live contract tests
 scripts/                   contract-against-npm.sh
 ios-build.sh, ios-test.sh  Gala Engine recipes (build + bundled login, kit tests)

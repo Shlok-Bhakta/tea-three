@@ -35,7 +35,14 @@ public final class SharedStore: @unchecked Sendable {
     }
 
     public var settings: CopilotSettings {
-        get { decode(CopilotSettings.self, Key.settings) ?? .default }
+        get {
+            var settings = decode(CopilotSettings.self, Key.settings) ?? .default
+            // Saved settings carry the old default title; it's the Clanker now.
+            if CopilotSettings.legacyThreadTitles.contains(settings.threadTitle) {
+                settings.threadTitle = CopilotSettings.defaultThreadTitle
+            }
+            return settings
+        }
         set { encode(newValue, Key.settings) }
     }
 

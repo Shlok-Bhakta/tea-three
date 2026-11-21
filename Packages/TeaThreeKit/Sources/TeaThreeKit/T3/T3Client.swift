@@ -172,6 +172,15 @@ public struct T3Client: Sendable {
         )
     }
 
+    public func rename(threadId: String, to title: String) async throws {
+        struct Args: Encodable {
+            let threadId: String
+            let action = "rename"
+            let title: String
+        }
+        _ = try await mcp.callTool("t3_thread_update", arguments: JSONValue.from(Args(threadId: threadId, title: title)))
+    }
+
     public func organize(threadId: String, _ action: OrganizeAction, snoozedUntil: Date? = nil) async throws {
         struct Args: Encodable {
             let threadId: String

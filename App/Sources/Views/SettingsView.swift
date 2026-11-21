@@ -39,25 +39,26 @@ struct SettingsView: View {
                     }
                     if let id = model.copilotThreadID {
                         LabeledContent("Thread", value: id).font(.caption).lineLimit(1).truncationMode(.middle)
-                        Button("Start a fresh Copilot thread", role: .destructive) { model.resetCopilotThread() }
+                        Button("Start a fresh Clanker thread", role: .destructive) { model.resetCopilotThread() }
                     }
                 } header: {
-                    Text("Copilot thread")
+                    Text("Clanker thread")
                 } footer: {
-                    Text("The Copilot is a normal pinned thread in T3 Code, in your home folder project unless you pick another. Pick the model on the main screen; threads the Copilot starts use the same one.")
+                    Text("The Clanker is a normal pinned thread in T3 Code, in your home folder project unless you pick another. Pick the model on the main screen; threads the Clanker starts use the same one.")
                 }
 
                 Section {
                     TextEditor(text: $model.settings.extraInstructions)
                         .frame(minHeight: 100)
                 } header: {
-                    Text("Notes for the Copilot")
+                    Text("Notes for the Clanker")
                 } footer: {
                     Text("For example: “Food logs go to the Health project using the food-log skill. Snooze anything I say to do later until tomorrow 9am.”")
                 }
 
                 Section {
                     Toggle("Speak replies", isOn: $model.settings.speakReplies)
+                    VoiceDownloadRow()
                     NavigationLink {
                         VoicePicker().themed()
                     } label: {

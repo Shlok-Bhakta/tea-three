@@ -45,6 +45,10 @@ nonisolated final class SpeechListener: @unchecked Sendable {
     private var resultsTask: Task<Void, Never>?
     /// A reply is ready: end the turn as soon as it's clear nobody is talking.
     private var yieldRequested = false
+    /// Press-and-hold: no end-of-turn cutoff until released.
+    private var held = false
+    /// Released before the next listen began (nothing was captured): end it at once.
+    private var releasedBeforeStart = false
     private var latest = ""
     private var startedAt = Date()
     private var lastTextAt: Date?
@@ -123,6 +127,28 @@ nonisolated final class SpeechListener: @unchecked Sendable {
         queue.async { self.yieldRequested = true }
     }
 
+    /// Press-and-hold began: keep listening, whatever the pauses, until `releaseHold()`.
+    /// Applies to the listen in progress or, if none, the next one.
+    func hold() {
+        queue.async {
+            self.held = true
+            self.releasedBeforeStart = false
+            self.current?.held = true
+        }
+    }
+
+    /// Press-and-hold ended: send what the held turn heard, right away.
+    func releaseHold() {
+        queue.async {
+            self.held = false
+            if let listen = self.current {
+                if listen.held { self.finish(sending: true) }
+            } else {
+                self.releasedBeforeStart = true
+            }
+        }
+    }
+
     private func begin(
         _ listen: Listen,
         analyzer: SpeechAnalyzer,
@@ -142,6 +168,7 @@ nonisolated final class SpeechListener: @unchecked Sendable {
             return
         }
         current = listen
+        listen.held = held
         self.continuation = continuation
         self.analyzer = analyzer
         self.detector = detector
@@ -185,6 +212,13 @@ nonisolated final class SpeechListener: @unchecked Sendable {
             return
         }
 
+        if releasedBeforeStart {
+            // A hold that ended before the mic opened: nothing to send.
+            releasedBeforeStart = false
+            finish(sending: false)
+            return
+        }
+
         let ticker = DispatchSource.makeTimerSource(queue: queue)
         ticker.schedule(deadline: .now() + 0.1, repeating: 0.1)
         ticker.setEventHandler { [weak self] in self?.tick(noSpeechTimeout: noSpeechTimeout) }
@@ -213,6 +247,8 @@ nonisolated final class SpeechListener: @unchecked Sendable {
     private func tick(noSpeechTimeout: TimeInterval) {
         guard continuation != nil else { return }
         let now = Date()
+        // Held: only letting go ends the turn.
+        if held { return }
         if now.timeIntervalSince(startedAt) > Self.maximumTurn {
             finish(sending: true)
             return
@@ -309,6 +345,8 @@ nonisolated private final class Listen: @unchecked Sendable {
     // Guarded by the listener's queue.
     var finalized = ""
     var volatile = ""
+    /// Press-and-hold covered this turn, so letting go sends it.
+    var held = false
 
     var isCancelled: Bool { lock.withLock { cancelled } }
     func cancel() { lock.withLock { cancelled = true } }
