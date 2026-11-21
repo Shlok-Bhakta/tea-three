@@ -18,7 +18,10 @@ final class SendMessageHandler: NSObject, INSendMessageIntentHandling {
     )
 
     /// Asks for Siri access once, and teaches Siri the name "Clanker".
+    /// Only with the SiriKit entitlement: without it, INPreferences raises an
+    /// exception and kills the app.
     static func prepare() {
+        guard isAvailable else { return }
         if INPreferences.siriAuthorizationStatus() == .notDetermined {
             INPreferences.requestSiriAuthorization { _ in }
         }
@@ -29,6 +32,7 @@ final class SendMessageHandler: NSObject, INSendMessageIntentHandling {
     /// Tells iOS a message went to Clanker in this app, so Siri learns that
     /// "message Clanker" means here rather than Messages.
     static func donate(_ text: String) {
+        guard isAvailable else { return }
         let intent = INSendMessageIntent(
             recipients: [clanker], outgoingMessageType: .outgoingMessageText, content: text,
             speakableGroupName: nil, conversationIdentifier: "clanker", serviceName: nil, sender: nil, attachments: nil
