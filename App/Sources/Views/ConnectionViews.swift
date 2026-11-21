@@ -1,33 +1,6 @@
 import SwiftUI
 import TeaThreeKit
 
-/// The dot under the title: green when the server answers, amber while
-/// checking, red when it can't be reached.
-struct ConnectionBadge: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.theme) private var theme
-
-    var body: some View {
-        HStack(spacing: 5) {
-            ConnectionDot(state: ConnectionState(model))
-            Text(text)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(theme.foregroundSecondary)
-                .lineLimit(1)
-        }
-        .animation(.default, value: model.connection)
-    }
-
-    private var text: String {
-        switch ConnectionState(model) {
-        case .connected: model.serverName
-        case .checking: "Connecting to \(model.serverName)…"
-        case .offline: "\(model.serverName) · offline"
-        case .signedOut: "Not signed in"
-        }
-    }
-}
-
 enum ConnectionState: Equatable {
     case checking, connected, offline, signedOut
 

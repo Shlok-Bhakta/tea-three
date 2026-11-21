@@ -39,15 +39,12 @@ struct HomeView: View {
                 }
             }
             .toolbar {
-                ToolbarItem(placement: .principal) {
+                ToolbarItem(placement: .topBarLeading) {
+                    // Just a dot; tap for the details.
                     Button { showConnection = true } label: {
-                        VStack(spacing: 1) {
-                            HStack(spacing: 6) {
-                                Image("Mark").resizable().scaledToFit().frame(height: 15).foregroundStyle(theme.primaryText)
-                                Text("Tea Three").font(.headline).foregroundStyle(theme.foreground)
-                            }
-                            ConnectionBadge()
-                        }
+                        ConnectionDot(state: ConnectionState(model))
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Connection to \(model.serverName)")
@@ -55,6 +52,7 @@ struct HomeView: View {
                         ConnectionDetails().themed().presentationCompactAdaptation(.popover)
                     }
                 }
+                .sharedBackgroundVisibility(.hidden)
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Settings", systemImage: "gearshape") { showSettings = true }
                 }
@@ -117,13 +115,6 @@ struct HomeView: View {
                 Text(hasModel ? "What should we do?" : "Pick a model to start")
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(theme.foreground)
-                Text(hasModel
-                     ? "Tap the mic and just talk. Everything goes to your “\(model.settings.threadTitle)” thread in T3 Code."
-                     : "Tap the model under the mic to choose which model your Clanker runs on.")
-                    .font(.subheadline)
-                    .foregroundStyle(theme.foregroundSecondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
             }
         } else {
             ScrollView {
@@ -135,16 +126,18 @@ struct HomeView: View {
                         Bubble(text: voice.partial).opacity(0.6)
                     }
                     if voice.isWorking {
-                        HStack(spacing: 10) {
-                            Label("Working on it…", systemImage: "ellipsis")
+                        HStack(spacing: 12) {
+                            Image(systemName: "ellipsis")
+                                .font(.title2.weight(.semibold))
                                 .symbolEffect(.variableColor.iterative)
-                            Spacer(minLength: 0)
-                            Button("Stop", systemImage: "stop.fill") { Task { await voice.interrupt() } }
-                                .font(.subheadline.weight(.semibold))
-                                .buttonStyle(.glass)
-                                .tint(theme.primaryText)
+                                .accessibilityLabel("Working on it")
+                            Button { Task { await voice.interrupt() } } label: {
+                                Image(systemName: "stop.circle")
+                                    .font(.title3)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Stop")
                         }
-                        .font(.subheadline)
                         .foregroundStyle(theme.foregroundSecondary)
                     }
                 }
@@ -201,8 +194,6 @@ struct HomeView: View {
                 textBar
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            StatusLine(voice: voice, hasModel: hasModel)
-                .padding(.horizontal, 24)
             HStack {
                 PhotoButton(diameter: 54)
                     .disabled(!hasModel)
@@ -331,35 +322,6 @@ private struct TalkButton: View {
     }
 }
 
-/// One line above the controls saying what's happening, plus what's being heard.
-private struct StatusLine: View {
-    @Environment(\.theme) private var theme
-    let voice: VoiceSession
-    let hasModel: Bool
-
-    var body: some View {
-        Text(text)
-            .font(.subheadline.weight(.medium))
-            .foregroundStyle(theme.foregroundSecondary)
-            .multilineTextAlignment(.center)
-            .lineLimit(2)
-            .frame(maxWidth: .infinity)
-            .contentTransition(.opacity)
-            .animation(.default, value: text)
-    }
-
-    private var text: String {
-        if voice.isHolding { return "Listening until you let go…" }
-        switch voice.phase {
-        case .listening:
-            return voice.isWorking ? "Working on it. Talk to steer, or say “cancel that”." : "Listening… just talk"
-        case .thinking: return "Working on it…"
-        case .speaking: return "Speaking…"
-        case .idle: return hasModel ? "Tap to talk" : "Choose a model first"
-        }
-    }
-}
-
 /// A ring that keeps expanding out of the talk button while it listens.
 private struct PulseRing: View {
     let color: Color
@@ -430,27 +392,30 @@ private struct DeliveryLabel: View {
     let server: String
 
     var body: some View {
-        Group {
-            switch delivery {
-            case .sending:
-                HStack(spacing: 5) {
-                    ProgressView().controlSize(.mini)
-                    Text("Sending…")
-                }
-            case .delivered:
-                Label("Delivered to \(server)", systemImage: "checkmark")
-            case .steered:
-                Label("Steered", systemImage: "arrow.turn.down.right")
-            case .queued:
-                Label("Waiting for connection", systemImage: "clock")
-            case .failed:
-                Label("Not sent", systemImage: "exclamationmark.circle")
-                    .foregroundStyle(.orange)
-            }
+        Image(systemName: symbol)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(delivery == .failed ? .orange : theme.foregroundSecondary)
+            .padding(.trailing, 6)
+            .contentTransition(.symbolEffect(.replace))
+            .accessibilityLabel(label)
+    }
+
+    /// A clock until it's there, then a single check (steers too).
+    private var symbol: String {
+        switch delivery {
+        case .sending, .queued: "clock"
+        case .delivered, .steered: "checkmark"
+        case .failed: "exclamationmark.circle"
         }
-        .font(.caption)
-        .foregroundStyle(theme.foregroundSecondary)
-        .padding(.trailing, 6)
-        .animation(.default, value: delivery)
+    }
+
+    private var label: String {
+        switch delivery {
+        case .sending: "Sending"
+        case .queued: "Waiting for connection"
+        case .delivered: "Delivered to \(server)"
+        case .steered: "Steered"
+        case .failed: "Not sent"
+        }
     }
 }
