@@ -57,7 +57,7 @@ struct PairingView: View {
                     Text("Ask for approvals").tag(MCPOAuth.Access.approvalRequired)
                 }
             } footer: {
-                Text("Tea Three gets an orchestration-only token: it can read and run threads, nothing else. “Ask for approvals” means threads it starts stop and wait for you in T3 Code, which doesn't work hands-free.")
+                Text("Clanker gets an orchestration-only token: it can read and run threads, nothing else. “Ask for approvals” means threads it starts stop and wait for you in T3 Code, which doesn't work hands-free.")
             }
 
             if let error {
@@ -77,7 +77,7 @@ struct PairingView: View {
                 .disabled(working || (linkText.isEmpty && (server.isEmpty || code.isEmpty)))
             }
         }
-        .navigationTitle("Tea Three")
+        .navigationTitle("Clanker")
         .sheet(isPresented: $scanning) {
             QRScanner { scanned in
                 scanning = false

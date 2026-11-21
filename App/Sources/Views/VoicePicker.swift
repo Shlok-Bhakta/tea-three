@@ -94,7 +94,7 @@ struct VoicePicker: View {
                         }
                     }
                 } footer: {
-                    Text("If you've made a Personal Voice in iOS Settings, Tea Three can reply in it.")
+                    Text("If you've made a Personal Voice in iOS Settings, Clanker can reply in it.")
                 }
             }
         }
@@ -171,7 +171,7 @@ struct VoiceDownloadRow: View {
                 }
                 ProgressView(value: fraction)
                     .tint(theme.primary)
-                Text("\(Int(fraction * 100))% of \(size). Keep Tea Three open.")
+                Text("\(Int(fraction * 100))% of \(size). Keep Clanker open.")
                     .font(.caption)
                     .foregroundStyle(theme.foregroundSecondary)
             }

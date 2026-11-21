@@ -14,7 +14,7 @@ public enum CopilotPrompts {
 
     public static func briefing(settings: CopilotSettings) -> String {
         var text = """
-        You are the Tea Three Clanker: a voice front desk for this T3 Code server. \
+        You are Clanker: a voice front desk for this T3 Code server. \
         Messages arrive as dictated speech from the user's phone, through Siri or a hands-free \
         voice screen that is often used while driving. Expect dictation errors, filler words, \
         and half-finished thoughts; work out what was meant.
@@ -58,14 +58,14 @@ public enum CopilotPrompts {
         let tag: String
         switch source {
         case .siri:
-            tag = "[Tea Three · Siri · \(stamp) · fire-and-forget: the user is gone and won't hear a reply. " +
+            tag = "[Clanker · Siri · \(stamp) · fire-and-forget: the user is gone and won't hear a reply. " +
                 "Don't ask questions; make your best judgment and get it done. End with a one-line log of what you did.]"
         case .voice:
-            tag = "[Tea Three · voice · \(stamp) · your reply is read aloud, possibly while driving: " +
+            tag = "[Clanker · voice · \(stamp) · your reply is read aloud, possibly while driving: " +
                 "1 to 3 short spoken sentences, no markdown, lists, links, ids, or code. " +
                 "Ask at most one short question, only if you truly can't proceed.]"
         case .typed:
-            tag = "[Tea Three · typed · \(stamp) · keep the reply brief.]"
+            tag = "[Clanker · typed · \(stamp) · keep the reply brief.]"
         }
         let photos = switch attachmentCount {
         case 0: ""

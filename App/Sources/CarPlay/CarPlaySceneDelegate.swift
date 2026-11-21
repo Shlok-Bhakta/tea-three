@@ -25,7 +25,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
         guard AppModel.shared.isPaired else {
             let template = CPInformationTemplate(
-                title: "Tea Three",
+                title: "Clanker",
                 layout: .leading,
                 items: [CPInformationItem(title: "Not paired", detail: "Pair with T3 Code on your iPhone while parked.")],
                 actions: []

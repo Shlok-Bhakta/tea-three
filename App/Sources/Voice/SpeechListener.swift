@@ -25,7 +25,7 @@ nonisolated final class SpeechListener: @unchecked Sendable {
 
         var errorDescription: String? {
             switch self {
-            case .notAuthorized: "Tea Three needs microphone and speech recognition access. Turn them on in Settings."
+            case .notAuthorized: "Clanker needs microphone and speech recognition access. Turn them on in Settings."
             case .unavailable: "Speech recognition isn't available right now."
             case .unsupportedLanguage: "On-device transcription doesn't support this phone's language yet."
             }

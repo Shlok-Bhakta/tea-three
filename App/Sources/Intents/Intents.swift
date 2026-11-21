@@ -1,13 +1,13 @@
 import AppIntents
 import TeaThreeKit
 
-/// "Hey Siri, tell Tea Three" → Siri asks "What should I send?" → you talk →
+/// "Hey Siri, tell Clanker" → Siri asks "What should I send?" → you talk →
 /// Siri says "Sent." and you're done. Runs in the background, works on a
 /// locked phone and in CarPlay. The Copilot thread does the rest.
 struct SendToT3Intent: AppIntent {
-    static let title: LocalizedStringResource = "Send to T3 Code"
+    static let title: LocalizedStringResource = "Send to Clanker"
     static let description = IntentDescription(
-        "Sends anything the user says (food or health logs, notes, tasks, questions, coding requests) to their T3 Code Clanker, an AI agent on their own server that has their data and tools and routes it to the right place. Tea Three keeps no data of its own to search, so always hand the request over instead of answering it.",
+        "Sends anything the user says (food or health logs, notes, tasks, questions, coding requests) to Clanker, the user's AI agent on their own server that has their data and tools and routes it to the right place. This app keeps no data of its own to search, so always hand the request over instead of answering it.",
         categoryName: "Clanker"
     )
     static let supportedModes: IntentModes = .background
@@ -21,7 +21,7 @@ struct SendToT3Intent: AppIntent {
     var message: String
 
     static var parameterSummary: some ParameterSummary {
-        Summary("Send \(\.$message) to T3 Code")
+        Summary("Send \(\.$message) to Clanker")
     }
 
     func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<Bool> {
@@ -30,12 +30,12 @@ struct SendToT3Intent: AppIntent {
     }
 }
 
-/// Opens Tea Three straight into hands-free conversation mode. Put this on
+/// Opens Clanker straight into hands-free conversation mode. Put this on
 /// the Action button: press it, talk, hear the answer, keep talking.
 struct TalkToT3Intent: AppIntent {
-    static let title: LocalizedStringResource = "Talk to T3 Code"
+    static let title: LocalizedStringResource = "Talk to Clanker"
     static let description = IntentDescription(
-        "Opens Tea Three listening, for a back-and-forth with your T3 Code Clanker. Say “goodbye” to stop.",
+        "Opens Clanker listening, for a back-and-forth with it. Say “goodbye” to stop.",
         categoryName: "Clanker"
     )
     static let supportedModes: IntentModes = .foreground(.immediate)
@@ -49,9 +49,9 @@ struct TalkToT3Intent: AppIntent {
 /// Shortcuts building block: ask and get the Copilot's answer back as text,
 /// e.g. Dictate Text → Ask T3 Code → Speak Text. Waits up to ~25 seconds.
 struct AskT3Intent: AppIntent {
-    static let title: LocalizedStringResource = "Ask T3 Code"
+    static let title: LocalizedStringResource = "Ask Clanker"
     static let description = IntentDescription(
-        "Asks the user's T3 Code Clanker (an AI agent on their own server with their health, food, notes, finances, and code) and reads back its answer. Tea Three keeps no data of its own, so hand any question about that data to this action instead of answering it.",
+        "Asks Clanker (the user's AI agent on their own server with their health, food, notes, finances, and code) and reads back its answer. This app keeps no data of its own, so hand any question about that data to this action instead of answering it.",
         categoryName: "Clanker"
     )
     static let supportedModes: IntentModes = .background
@@ -60,7 +60,7 @@ struct AskT3Intent: AppIntent {
     var question: String
 
     static var parameterSummary: some ParameterSummary {
-        Summary("Ask T3 Code \(\.$question)")
+        Summary("Ask Clanker \(\.$question)")
     }
 
     func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<String> {
@@ -81,21 +81,21 @@ struct AskT3Intent: AppIntent {
     }
 }
 
-/// Siri phrases. Each one must be said on its own ("Hey Siri, ask Tea Three"),
+/// Siri phrases. Each one must be said on its own ("Hey Siri, ask Clanker"),
 /// then Siri asks for the message: iOS 26 can't take free text in the same
 /// breath, and a whole sentence goes to Siri's own model instead of the app.
+/// One-breath messages go through SiriKit instead (`SendMessageHandler`):
+/// "Message Clanker saying …". "Message"/"Send to" phrases aren't
+/// here: Siri routes those to messaging, which is that handler's job.
 struct TeaThreeShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
             intent: SendToT3Intent(),
             phrases: [
                 "Tell \(.applicationName)",
-                "Send to \(.applicationName)",
-                "Message \(.applicationName)",
                 "Log with \(.applicationName)",
-                "Note to \(.applicationName)",
             ],
-            shortTitle: "Send to T3",
+            shortTitle: "Send",
             systemImageName: "paperplane"
         )
         AppShortcut(
@@ -105,7 +105,7 @@ struct TeaThreeShortcuts: AppShortcutsProvider {
                 "Start \(.applicationName)",
                 "Open \(.applicationName) voice",
             ],
-            shortTitle: "Talk to T3",
+            shortTitle: "Talk",
             systemImageName: "waveform"
         )
         AppShortcut(
@@ -116,7 +116,7 @@ struct TeaThreeShortcuts: AppShortcutsProvider {
                 "Check with \(.applicationName)",
                 "Question for \(.applicationName)",
             ],
-            shortTitle: "Ask T3",
+            shortTitle: "Ask",
             systemImageName: "questionmark.bubble"
         )
     }

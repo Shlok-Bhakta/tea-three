@@ -26,9 +26,9 @@ public struct CopilotSettings: Sendable, Codable, Equatable {
 
     public var turnDetector: TurnDetector { TurnDetector(pause: turnPause ?? TurnDetector.defaultPause) }
 
-    public static let defaultThreadTitle = "Tea Three Clanker"
+    public static let defaultThreadTitle = "Clanker"
     /// Earlier default titles. A thread with one is still ours; it's renamed on next use.
-    public static let legacyThreadTitles = ["Tea Three Copilot"]
+    public static let legacyThreadTitles = ["Tea Three Clanker", "Tea Three Copilot"]
 
     public init(
         threadTitle: String = CopilotSettings.defaultThreadTitle,

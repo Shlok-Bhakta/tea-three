@@ -1,3 +1,4 @@
+import Intents
 import SwiftUI
 import TeaThreeKit
 
@@ -107,7 +108,10 @@ struct SettingsView: View {
                 }
 
                 Section("Siri, Shortcuts & Action button") {
-                    Text("“Hey Siri, tell Tea Three” sends and forgets. “Talk to Tea Three” opens hands-free mode. Assign “Talk to T3” to the Action button in Settings › Action Button › Shortcut.")
+                    // Read each time Settings opens, so a change in iOS Settings shows up.
+                    Text(SendMessageHandler.isAvailable && INPreferences.siriAuthorizationStatus() == .authorized
+                         ? "“Hey Siri, message Clanker saying …” sends it in one go. “Talk to Clanker” opens hands-free mode; put “Talk” on the Action button in Settings › Action Button › Shortcut."
+                         : "“Hey Siri, tell Clanker”, then say the message. “Talk to Clanker” opens hands-free mode; put “Talk” on the Action button in Settings › Action Button › Shortcut.")
                         .font(.footnote)
                 }
             }

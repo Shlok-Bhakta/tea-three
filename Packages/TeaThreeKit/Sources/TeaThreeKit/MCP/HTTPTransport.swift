@@ -44,12 +44,12 @@ public enum T3Error: Error, Sendable, Equatable, LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .transport(let message): "Couldn't reach T3 Code: \(message)"
-        case .unauthorized(let message): "Not paired with T3 Code (\(message)). Pair again in Tea Three."
+        case .unauthorized(let message): "Not paired with T3 Code (\(message)). Pair again in Clanker."
         case .protocolMismatch(let message): "T3 Code answered in an unexpected format: \(message)"
         case .rpc(let code, let message): "T3 Code MCP error \(code): \(message)"
         case .tool(let name, let code, let message): "\(name) failed\(code.map { " (\($0))" } ?? ""): \(message)"
         case .pairing(let message): message
-        case .needsModel: "Pick a model in Tea Three first."
+        case .needsModel: "Pick a model in Clanker first."
         }
     }
 
@@ -57,11 +57,11 @@ public enum T3Error: Error, Sendable, Equatable, LocalizedError {
     public var spokenDescription: String {
         switch self {
         case .transport: "I couldn't reach T3 Code."
-        case .unauthorized: "Tea Three isn't paired anymore. Open the app to pair again."
+        case .unauthorized: "Clanker isn't paired anymore. Open the app to pair again."
         case .protocolMismatch: "T3 Code changed in a way I don't understand yet."
         case .rpc, .tool: "T3 Code returned an error."
         case .pairing(let message): message
-        case .needsModel: "Pick a model in the Tea Three app first."
+        case .needsModel: "Pick a model in the Clanker app first."
         }
     }
 }

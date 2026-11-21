@@ -294,6 +294,7 @@ final class VoiceSession {
     private func submit(_ text: String, source: CopilotPrompts.Source, speak: Bool, attachments: [OutgoingAttachment]) async {
         let turn = Turn(role: .you, text: Self.label(text, photos: attachments.count), delivery: .sending)
         turns.append(turn)
+        if !text.isEmpty { SendMessageHandler.donate(text) }
         _ = await stopping?.value
         if isWorking {
             await steer(text, turn: turn.id, source: source, attachments: attachments, speak: speak)

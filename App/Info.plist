@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Tea Three</string>
+	<string>Clanker</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -31,6 +31,10 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>INIntentsSupported</key>
+	<array>
+		<string>INSendMessageIntent</string>
+	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSAppTransportSecurity</key>
@@ -39,15 +43,21 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Take a photo to send to your T3 Code Copilot, or scan the pairing QR code from `t3 pair`.</string>
+	<string>Take a photo to send to Clanker, or scan the pairing QR code from `t3 pair`.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Tea Three talks to the T3 Code server on your Mac.</string>
+	<string>Clanker talks to your T3 Code server.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Tea Three listens when you talk to your T3 Code Copilot.</string>
+	<string>Clanker listens when you talk to it.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Pick photos to send to your T3 Code Copilot.</string>
+	<string>Pick photos to send to Clanker.</string>
+	<key>NSSiriUsageDescription</key>
+	<string>Say “Message Clanker saying …” to send something in one go.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Tea Three turns what you say into a message for your T3 Code Copilot, on device.</string>
+	<string>Clanker turns what you say into text, on device.</string>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>INSendMessageIntent</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

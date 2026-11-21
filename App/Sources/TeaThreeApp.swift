@@ -3,6 +3,7 @@ import TeaThreeKit
 
 @main
 struct TeaThreeApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = AppModel.shared
     @Environment(\.scenePhase) private var scenePhase
 
@@ -22,6 +23,7 @@ struct TeaThreeApp: App {
                         PairingRouter.shared.pending = url
                     }
                     #endif
+                    SendMessageHandler.prepare()
                     await model.refresh()
                 }
                 .onChange(of: scenePhase, initial: true) { _, phase in

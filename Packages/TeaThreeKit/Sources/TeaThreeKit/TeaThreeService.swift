@@ -56,6 +56,8 @@ public struct TeaThreeService: Sendable {
         /// Spoken by Siri. Kept to a few words.
         public let dialog: String
         public let delivered: Bool
+        /// Not sent and not saved: the login is gone, so only the app can fix it.
+        public var needsApp = false
     }
 
     /// Siri's fire-and-forget path. Never throws: if T3 can't be reached the
@@ -69,7 +71,7 @@ public struct TeaThreeService: Sendable {
             try await copilot.send(trimmed, source: .siri)
             return DropResult(dialog: "Sent.", delivered: true)
         } catch let error as T3Error {
-            if case .unauthorized = error { return DropResult(dialog: error.spokenDescription, delivered: false) }
+            if case .unauthorized = error { return DropResult(dialog: error.spokenDescription, delivered: false, needsApp: true) }
             store.enqueue(trimmed, source: .siri)
             return DropResult(dialog: "\(error.spokenDescription) I saved it and will send it later.", delivered: false)
         } catch {

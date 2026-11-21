@@ -30,7 +30,7 @@ struct CopilotTests {
         #expect(server.calls(to: "t3_thread_launch").isEmpty)
     }
 
-    @Test("an old \"Tea Three Copilot\" thread is kept and renamed to the Clanker")
+    @Test("an old \"Tea Three Copilot\" thread is kept and renamed to Clanker")
     func renamesLegacyThread() async throws {
         let server = FakeT3()
         let fixture = readFixture
@@ -41,7 +41,7 @@ struct CopilotTests {
                 thread["title"] = "Tea Three Copilot"
                 root["thread"] = .object(thread)
                 return .object(root)
-            case "t3_thread_update": return ["threadId": "x", "action": "rename", "title": "Tea Three Clanker"]
+            case "t3_thread_update": return ["threadId": "x", "action": "rename", "title": "Clanker"]
             default: return nil
             }
         }
@@ -51,7 +51,7 @@ struct CopilotTests {
         #expect(try await copilot.ensureThread() == copilotThreadId)
         let rename = try #require(server.calls(to: "t3_thread_update").first?.arguments)
         #expect(rename["action"] == "rename")
-        #expect(rename["title"] == "Tea Three Clanker")
+        #expect(rename["title"] == "Clanker")
         #expect(server.calls(to: "t3_thread_launch").isEmpty)
     }
 
@@ -68,7 +68,7 @@ struct CopilotTests {
 
         let id = try await copilot.ensureThread()
         let launch = try #require(server.calls(to: "t3_thread_launch").first?.arguments)
-        #expect(launch["title"] == "Tea Three Clanker")
+        #expect(launch["title"] == "Clanker")
         // No project chosen: the broadest project on the server, never a separate scratch folder.
         #expect(launch["projectId"] == "f5d40789-8ddf-4d0b-8748-70c4a1d8a009")
         #expect(launch["scratch"] == nil)
@@ -276,6 +276,7 @@ struct DropTests {
         let result = await TeaThreeService(credentials: MemoryCredentialStore(), store: store, transport: FakeT3()).drop("hi")
         #expect(!result.delivered)
         #expect(result.dialog.contains("Open the app"))
+        #expect(result.needsApp)
         #expect(store.outbox.isEmpty)
     }
 }
